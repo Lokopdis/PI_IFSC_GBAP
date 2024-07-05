@@ -8,6 +8,9 @@
 #define Pino_Chave_ON_OFF 16
 #define Pino_Rele_Seguranca 27
 
+// ACIONAMENTO REMOTO
+#define Pino_Acionamento_Remoto 4 // Alterar
+
 ////////////////////////// VARIAVEIS //////////////////////////
 // LÓGICA DE ACIONAMENTO
 bool Botao_Emergencia_Pressionado = false; // Verrifica botão de emergência precionado
@@ -17,6 +20,9 @@ bool Robo_Ok = false; // Variável de acionamento do robô
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // LÓGICA DE ACIONAMENTO
 void StatusAcionamento();
+
+// ACIONAMENTO REMOTO
+void AcionamentoRemoto();
 
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
@@ -29,10 +35,16 @@ void setup() {
 
   digitalWrite(Pino_Rele_Seguranca, HIGH); // Garante que o relé estará desacionado
 
+  // ACIONAMENTO REMOTO
+  pinMode(Pino_Acionamento_Remoto, INPUT_PULLDOWN);
+
   // INTERRUPÇÕES
   // LÓGICA DE ACIOANEMNTO
   attachInterrupt(digitalPinToInterrupt(Pino_Botao_Emergencia), StatusAcionamento, CHANGE);
   attachInterrupt(digitalPinToInterrupt(Pino_Chave_ON_OFF), StatusAcionamento, CHANGE);
+
+  // ACIONAMENTO REMOTO
+  attachInterrupt(digitalPinToInterrupt(Pino_Acionamento_Remoto), AcionamentoRemoto, CHANGE);
 
 }
 
@@ -70,5 +82,16 @@ void StatusAcionamento (){
   }
 
   Chave_ON_OFF_Anterior = Chave_ON_OFF_Atual;
+
+}
+
+// ACIONAEMNTO REMOTO
+void AcionamentoRemoto(){
+  bool Status_Remoto = digitalRead(Pino_Acionamento_Remoto);
+  if (Status_Remoto == HIGH){
+    digitalWrite(Pino_Rele_Seguranca, LOW);
+  }else{
+    digitalWrite(Pino_Rele_Seguranca, HIGH);
+  }
 
 }
