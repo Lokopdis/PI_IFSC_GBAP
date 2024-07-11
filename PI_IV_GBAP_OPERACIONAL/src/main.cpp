@@ -9,13 +9,16 @@
 #define Pino_Rele_Seguranca 27
 
 // ACIONAMENTO REMOTO
-#define Pino_Acionamento_Remoto 4 // Alterar
+#define Pino_Acionamento_Remoto 33 // Alterar
 
 ////////////////////////// VARIAVEIS //////////////////////////
 // LÓGICA DE ACIONAMENTO
 bool Botao_Emergencia_Pressionado = false; // Verrifica botão de emergência precionado
 bool Chave_ON_OFF_Anterior = false; // Salva status anterior da chave liga e desliga
 bool Robo_Ok = false; // Variável de acionamento do robô
+
+// ACIONAMENTO REMOTO
+bool Status_Remoto = false;
 
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // LÓGICA DE ACIONAMENTO
@@ -50,6 +53,8 @@ void setup() {
 
 /////////////////////////// LOOP ////////////////////////////
 void loop() {
+  Serial.println(Status_Remoto ? "Motor Ligado!" : "Motor Desligado");
+  delay(1000);
 }
 
 ///////////////////////// FUNÇÕES ///////////////////////////
@@ -87,7 +92,7 @@ void StatusAcionamento (){
 
 // ACIONAEMNTO REMOTO
 void AcionamentoRemoto(){
-  bool Status_Remoto = digitalRead(Pino_Acionamento_Remoto);
+  Status_Remoto = digitalRead(Pino_Acionamento_Remoto);
   if (Status_Remoto == HIGH){
     digitalWrite(Pino_Rele_Seguranca, LOW);
   }else{

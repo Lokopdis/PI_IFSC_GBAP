@@ -4,7 +4,7 @@
 #include <HTTPClient.h>
 
 /////////////////////////// DEFINES ///////////////////////////
-#define Pino_Comunicacao 16
+#define Pino_Comunicacao 18
 
 ////////////////////////// VARIAVEIS //////////////////////////
 // CONEXÃO COM A INTERNET
@@ -42,15 +42,13 @@ void setup() {
 /////////////////////////// LOOP ////////////////////////////
 void loop() {
     Read_Operacao();
-    if (StatusOperacao = !StatusOperacaoAtual){
       if (StatusOperacao == true)
       {
-        digitalWrite(Pino_Comunicacao, HIGH);
-      }else{
         digitalWrite(Pino_Comunicacao, LOW);
+      }else{
+        digitalWrite(Pino_Comunicacao, HIGH);
       }
       StatusOperacaoAtual = StatusOperacao;
-    }
     Serial.println(StatusOperacao ? "Motor Ligado!" : "Motor Desligado!");
 }
 
@@ -93,8 +91,10 @@ void Read_Operacao() {
 
       if (isOnValue.equals("true")) {
         StatusOperacao = true;
+        //Serial.println("1");
       } else {
         StatusOperacao = false;
+        //Serial.println("0");
       }
     } else {
       Serial.println("isOn field not found in the response");
@@ -103,6 +103,6 @@ void Read_Operacao() {
     Serial.print("Error on sending GET Request: ");
     Serial.println(httpResponseCode);
   }
-
+  Serial.println(StatusOperacao);
   http.end(); // Fecha a conexão HTTP
 }
