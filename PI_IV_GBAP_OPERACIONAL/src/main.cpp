@@ -53,6 +53,11 @@ const double Reducao_Motor_Roda = 32; // Rudação entre eixo do motor e roda
 volatile long Contador_Pulsos_Canal_A_Motor_1 = 0; // Contador de pulsos do canal A do encoder do motor 1
 volatile long Contador_Pulsos_Canal_B_Motor_1 = 0; // Contador de pulsos do canal B do encoder do motor 1
 
+// Controle
+float Referencia_Motor_1 = 0;
+float Erro_Motor_1 = 0;
+float Control_Motor_1 = 0;
+
 // PWM
 int PWM_Motor_1 = 3103; // Valor inicial para velocidade do motor 1
 
@@ -72,7 +77,14 @@ int PWM_Motor_2 = 3103; // Valor inicial para velocidade do motor 2
 double RPS_Motor_2 = 0; // Valor em m/s do motor 2
 long Aux_Convert_PWM_Motor_2 = 0; // Variável auxiliar para conversão do valor do PWM de 10 p/ 8 bits
 
-// CONTROLE
+// CONTROLLE
+// VELOCIDADE
+float Kp_Velocidade = 0;
+float Alpha_Velocidade = 0;
+
+// ANGULO
+float Kp_Angulo = 0;
+float Kp_Velocidade = 0;
 
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // SETUP INICIAL 
@@ -93,6 +105,9 @@ void Incrementar_Pulsos_Canal_B_Motor_1();
 // ENCODER 
 void Incrementar_Pulsos_Canal_A_Motor_2();
 void Incrementar_Pulsos_Canal_B_Motor_2();
+
+// CONTROLE
+void Controle_Velocidade(double RPS, volatile long &Pulsos_A, volatile long &Pulsos_B, float &Referencia, float &Erro_Anterior, float &Controle_Anterior, int Saida, int &Controle_Atual);
 
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
@@ -136,8 +151,8 @@ void setup() {
 
 /////////////////////////// LOOP ////////////////////////////
 void loop() {
-  Serial.println(Status_Remoto ? "Motor Ligado!" : "Motor Desligado");
-  delay(1000);
+  // Chama de controle Motor 1
+  Controle_Velocidade(RPS_Motor_1, Contador_Pulsos_Canal_A_Motor_1, Contador_Pulsos_Canal_B_Motor_1, Referencia_Motor_1, Erro_Motor_1, Control_Motor_1, Pino_Motor_1, PWM_Motor_1);
 }
 
 ///////////////////////// FUNÇÕES ///////////////////////////
@@ -207,3 +222,29 @@ void Incrementar_Pulsos_Canal_A_Motor_2(){
 void Incrementar_Pulsos_Canal_B_Motor_2(){
   Contador_Pulsos_Canal_B_Motor_2++;
 }
+
+// CONTROLE
+// VELOCIDADE
+void Controle_Velocidade (double RPS, volatile long &Pulsos_A, volatile long &Pulsos_B, float &Referencia, float &Erro_Anterior, float &Controle_Anterior, int Saida, int &Controle_Atual){
+  RPS = 10;
+  RPS *= Reducao_Encoder_Motor*Pulsos_A;
+  RPS /= Reducao_Motor_Roda*Pulsos_Por_Revolucao_Encoder;
+
+  float Erro_Atual = Referencia - RPS;
+  
+  Controle_Atual =  (Controle_Anterior + (Kp_Velocidade*Erro_Atual) - (Kp_Velocidade*Alpha_Velocidade*Erro_Anterior));
+
+  Erro_Anterior = Erro_Atual;
+  Controle_Anterior = Controle_Atual;
+
+  if(Controle_Atual >= 3878){
+    Controle_Atual = 3878;
+  }else if(Controle_Atual <=3103){
+    Controle_Atual = 3103;
+  }
+
+  long Auxiliar_Convert_PWM = map(Controle_Atual, 0, 4095, 0, 255);
+  dacWrite(Saida, (int) Auxiliar_Convert_PWM);
+}
+
+// ANGULO
