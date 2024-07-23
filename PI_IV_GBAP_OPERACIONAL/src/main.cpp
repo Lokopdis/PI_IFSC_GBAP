@@ -5,6 +5,8 @@
 ///////////////////////// DIRETRIZES //////////////////////////
 #define INTERRUPCAO false
 #define TESTE true
+#define MOTOR_1 true
+#define MOTOR_2 true
 
 /////////////////////////// DEFINES ///////////////////////////
 // LÓGICA DE ACIONAMENTO
@@ -60,6 +62,24 @@ int PWM_Motor_1 = 3103; // Valor inicial para velocidade do motor 1
 double RPS_Motor_1 = 0; // Valor em m/s do motor 1
 long Aux_Convert_PWM_Motor_1 = 0; // Variável auxiliar para conversão do valor do PWM de 10 p/ 8 bits
 
+// CONTROLE
+// VELOCIDADE
+float Controle_Velocidade_Anterior_Motor_1 = 0;
+float Controle_Velocidade_Atual_Motor_1 = 0;
+float Kp_Velocidade_Motor_1 = 0;
+float Alpha_Velocidade_Motor_1 = 0;
+float Erro_Velocidade_Atual_Motor_1 = 0;
+float Erro_Velocidade_Anterior_Motor_1 = 0;
+float Referencia_Velocidade_Motor_1 = 0;
+
+// ÂNGULO
+float Referencia_Anterior_Motor_1 = 0;
+float Kp_Angulo_Motor_1 = 0;
+float Alpha_Angulo_Motor_1 = 0;
+float Erro_Angulo_Atual_Motor_1 = 0;
+float Erro_Angulo_Anterior_Motor_1 = 0;
+float Referencia_Angulo_Motor_1 = 0;
+
 // MOTOR 2 <-----
 // ENCODER 
 volatile long Contador_Pulsos_Canal_A_Motor_2 = 0; // Contador de pulsos do canal A do encoder do motor 2
@@ -71,6 +91,27 @@ int PWM_Motor_2 = 3103; // Valor inicial para velocidade do motor 2
 // RPS
 double RPS_Motor_2 = 0; // Valor em m/s do motor 2
 long Aux_Convert_PWM_Motor_2 = 0; // Variável auxiliar para conversão do valor do PWM de 10 p/ 8 bits
+
+// CONTROLE
+// VELOCIDADE
+float Controle_Velocidade_Anterior_Motor_2 = 0;
+float Controle_Velocidade_Atual_Motor_2 = 0;
+float Kp_Velocidade_Motor_2 = 0;
+float Alpha_Velocidade_Motor_2 = 0;
+float Erro_Velocidade_Atual_Motor_2 = 0;
+float Erro_Velocidade_Anterior_Motor_2 = 0;
+float Referencia_Velocidade_Motor_2 = 0;
+
+// ÂNGULO
+float Referencia_Anterior_Motor_2 = 0;
+float Kp_Angulo_Motor_2 = 0;
+float Alpha_Angulo_Motor_2 = 0;
+float Erro_Angulo_Atual_Motor_2 = 0;
+float Erro_Angulo_Anterior_Motor_2 = 0;
+float Referencia_Angulo_Motor_2 = 0;
+
+// GERAL
+int Motor_Index = 0;
 
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // SETUP INICIAL 
@@ -94,10 +135,10 @@ void Incrementar_Pulsos_Canal_B_Motor_2();
 
 // CONTROLE
 // Velocidade
-void Controle_Velocidade(double RPS, volatile long &Pulsos_A, volatile long &Pulsos_B, float &Referencia, float &Erro_Anterior, float &Controle_Anterior, int Saida, int &Controle_Atual);
+void Controle_Velocidade(int Index);
 
 // ÂNGULO
-void Controle_Angulo(float &Referencia_1, float &Referencia_2, float Erro_Anterior, float Controle_Anterior, uint8_t Angulo, float Ref_Angulo);
+void Controle_Angulo(int Index);
 
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
@@ -141,7 +182,8 @@ void setup() {
 
 /////////////////////////// LOOP ////////////////////////////
 void loop() {  
-  }
+
+}
 
 ///////////////////////// FUNÇÕES ///////////////////////////
 // SETUP INICIAL
@@ -213,42 +255,84 @@ void Incrementar_Pulsos_Canal_B_Motor_2(){
 
 // CONTROLE
 // VELOCIDADE
-void Controle_Velocidade (double RPS, volatile long &Pulsos_A, volatile long &Pulsos_B, float &Referencia, float &Erro_Anterior, float &Controle_Anterior, int Saida){
-  RPS = 10;
-  RPS *= Reducao_Encoder_Motor*Pulsos_A;
-  RPS /= Reducao_Motor_Roda*Pulsos_Por_Revolucao_Encoder;
-  Pulsos_A = 0;
-  Pulsos_B = 0;
+void Controle_Velocidade (int Index){
+  if (Index == 1){
 
-  float Erro_Atual = Referencia - RPS;
+    RPS_Motor_1 = 10;
+    RPS_Motor_1 *= Reducao_Encoder_Motor*Contador_Pulsos_Canal_A_Motor_1;
+    RPS_Motor_1 /= Reducao_Motor_Roda*Pulsos_Por_Revolucao_Encoder;
+
+    Contador_Pulsos_Canal_A_Motor_1 = 0;
+    Contador_Pulsos_Canal_B_Motor_1 = 0;
+
+  Erro_Velocidade_Atual_Motor_1 = Referencia_Velocidade_Motor_1 - RPS_Motor_1;
   
-  int Controle_Atual =  (Controle_Anterior + (Kp_Velocidade*Erro_Atual) - (Kp_Velocidade*Alpha_Velocidade*Erro_Anterior));
+  Controle_Velocidade_Atual_Motor_1 = (Controle_Velocidade_Anterior_Motor_1 + (Kp_Velocidade_Motor_1*Erro_Velocidade_Atual_Motor_1) - (Kp_Velocidade_Motor_1*Alpha_Velocidade_Motor_1*Erro_Velocidade_Anterior_Motor_1));
 
-  Erro_Anterior = Erro_Atual;
-  Controle_Anterior = Controle_Atual;
+  Erro_Velocidade_Anterior_Motor_1 = Erro_Velocidade_Atual_Motor_1;
+  Controle_Velocidade_Anterior_Motor_1 = Controle_Velocidade_Atual_Motor_1;
 
-  if(Controle_Atual >= 3878){
-    Controle_Atual = 3878;
-  }else if(Controle_Atual <=3103){
-    Controle_Atual = 3103;
+  if(Controle_Velocidade_Atual_Motor_1 >= 3878){
+    Controle_Velocidade_Atual_Motor_1 = 3878;
+  }else if(Controle_Velocidade_Atual_Motor_1 <=3103){
+    Controle_Velocidade_Atual_Motor_1 = 3103;
   }
 
-  long Auxiliar_Convert_PWM = map(Controle_Atual, 0, 4095, 0, 255);
-  dacWrite(Saida, (int) Auxiliar_Convert_PWM);
+  long Auxiliar_Convert_PWM = map(Controle_Velocidade_Atual_Motor_1, 0, 4095, 0, 255);
+  dacWrite(Pino_Motor_1, (int) Auxiliar_Convert_PWM);
+
+  }else if (Index == 2){
+
+      RPS_Motor_2 = 10;
+      RPS_Motor_2 *= Reducao_Encoder_Motor*Contador_Pulsos_Canal_A_Motor_2;
+      RPS_Motor_2 /= Reducao_Motor_Roda*Pulsos_Por_Revolucao_Encoder;
+
+      Contador_Pulsos_Canal_A_Motor_2 = 0;
+      Contador_Pulsos_Canal_B_Motor_2 = 0;
+
+      Erro_Velocidade_Atual_Motor_2 = Referencia_Velocidade_Motor_2 - RPS_Motor_2;
+      
+      Controle_Velocidade_Atual_Motor_2 = (Controle_Velocidade_Anterior_Motor_2 + (Kp_Velocidade_Motor_2*Erro_Velocidade_Atual_Motor_2) - (Kp_Velocidade_Motor_2*Alpha_Velocidade_Motor_2*Erro_Velocidade_Anterior_Motor_2));
+
+      Erro_Velocidade_Anterior_Motor_2 = Erro_Velocidade_Atual_Motor_2;
+      Controle_Velocidade_Anterior_Motor_2 = Controle_Velocidade_Atual_Motor_2;
+
+      if(Controle_Velocidade_Atual_Motor_2 >= 3878){
+        Controle_Velocidade_Atual_Motor_2 = 3878;
+      }else if(Controle_Velocidade_Atual_Motor_2 <=3103){
+        Controle_Velocidade_Atual_Motor_2 = 3103;
+      }
+
+      long Auxiliar_Convert_PWM = map(Controle_Velocidade_Atual_Motor_2, 0, 4095, 0, 255);
+      dacWrite(Pino_Motor_2, (int) Auxiliar_Convert_PWM);
+    }
 }
 
 // ANGULO
-void Controle_Angulo(float &Referencia_1, float &Referencia_2, float Erro_Anterior, float Controle_Anterior, uint8_t Angulo, float Ref_Angulo){
-  
-  float Erro =  Ref_Angulo - Angulo;
+void Controle_Angulo(int Index){
+  if (Index == 1){
+    float Angulo_Atual = 0;
 
-  // MOTOR 1
-  Referencia_1 = Referencia_1 + (Kp_Angulo*Erro) - (Kp_Angulo*Alpha_Angulo*Erro_Anterior);
-  Controle_Velocidade(RPS_Motor_1, Contador_Pulsos_Canal_A_Motor_1, Contador_Pulsos_Canal_B_Motor_1, Referencia_1, Erro_Velocidade_Motor_1, Controle_Velocidade_Motor_1, Pino_Motor_1);
+    Erro_Angulo_Atual_Motor_1 = Referencia_Angulo_Motor_1 -Angulo_Atual;
+    
+    Referencia_Velocidade_Motor_1 = (Referencia_Anterior_Motor_1 + (Kp_Angulo_Motor_1*Erro_Angulo_Atual_Motor_1) - (Kp_Angulo_Motor_1*Alpha_Angulo_Motor_1*Erro_Angulo_Anterior_Motor_1));
 
-  // MOTOR 2
-  Referencia_2 = Referencia_2 - (Kp_Angulo*Erro) - (Kp_Angulo*Alpha_Angulo*Erro_Anterior);
-  Controle_Velocidade(RPS_Motor_2, Contador_Pulsos_Canal_A_Motor_2, Contador_Pulsos_Canal_B_Motor_2, Referencia_2, Erro_Velocidade_Motor_2, Controle_Velocidade_Motor_2, Pino_Motor_2);
+    Erro_Angulo_Anterior_Motor_1 = Erro_Angulo_Atual_Motor_1;
+    Referencia_Anterior_Motor_1 = Referencia_Velocidade_Motor_1;
 
+    Controle_Velocidade(Index);
 
+  }else if (Index == 2){
+
+      float Angulo_Atual = 0;
+
+      Erro_Angulo_Atual_Motor_2 = Referencia_Angulo_Motor_2 -Angulo_Atual;
+      
+      Referencia_Velocidade_Motor_2 = (Referencia_Anterior_Motor_2 + (Kp_Angulo_Motor_1*Erro_Angulo_Atual_Motor_2) - (Kp_Angulo_Motor_2*Alpha_Angulo_Motor_2*Erro_Angulo_Anterior_Motor_2));
+
+      Erro_Angulo_Anterior_Motor_2 = Erro_Angulo_Atual_Motor_2;
+      Referencia_Anterior_Motor_2 = Referencia_Velocidade_Motor_2;
+
+    Controle_Velocidade(Index);
+    }
 }
