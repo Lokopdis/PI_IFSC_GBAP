@@ -1,12 +1,11 @@
 ///////////////////////// BIBLIOTECAS /////////////////////////
 #include <Arduino.h>
 #include <Wire.h>
+#include "esp_timer.h"
 
 ///////////////////////// DIRETRIZES //////////////////////////
 #define INTERRUPCAO false
 #define TESTE true
-#define MOTOR_1 true
-#define MOTOR_2 true
 
 /////////////////////////// DEFINES ///////////////////////////
 // LÓGICA DE ACIONAMENTO
@@ -110,6 +109,11 @@ float Erro_Angulo_Atual_Motor_2 = 0;
 float Erro_Angulo_Anterior_Motor_2 = 0;
 float Referencia_Angulo_Motor_2 = 0;
 
+#if TESTE == true
+// TIMER PARA TESTE
+esp_timer_handle_t periodic_timer;
+#endif
+
 // GERAL
 int Motor_Index = 0;
 
@@ -139,6 +143,11 @@ void Controle_Velocidade(int Index);
 
 // ÂNGULO
 void Controle_Angulo(int Index);
+
+#if TESTE == true
+// TIMER PARA TESTE
+void IRAM_ATTR onTimer(void* arg);
+#endif
 
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
@@ -177,6 +186,17 @@ void setup() {
 
     // PWM
   pinMode(Pino_Motor_1, OUTPUT);
+
+  #if TESTE == true
+  // TIMER PARA TESTE
+  const esp_timer_create_args_t timer_args = {
+    .callback = &onTimer,
+    .name = "periodic_timer"
+  };
+
+  esp_timer_create(&timer_args, &periodic_timer);
+  esp_timer_start_periodic(periodic_timer, 100000); // 100000 us = 100 ms
+  #endif
 
 }
 
@@ -336,3 +356,11 @@ void Controle_Angulo(int Index){
     Controle_Velocidade(Index);
     }
 }
+
+#if TESTE == true
+// TIMER PARA TESTE
+void IRAM_ATTR onTimer(void* arg) {
+  Controle_Angulo(1); // Controle do Motor 1
+  Controle_Angulo(2); // Controle do Motor 2
+}
+#endif
