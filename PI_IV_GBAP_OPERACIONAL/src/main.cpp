@@ -5,7 +5,7 @@
 
 ///////////////////////// DIRETRIZES //////////////////////////
 #define INTERRUPCAO false
-#define TESTE true
+#define TESTE false
 
 /////////////////////////// DEFINES ///////////////////////////
 // LÓGICA DE ACIONAMENTO
@@ -31,6 +31,24 @@
 
 // SAÍDA ANALÓGICA
 #define Pino_Motor_2 26 // Saída de analógica para o motor 2
+
+// BNO055
+#define BNO055_ADDRESS 0x28
+#define OPR_MODE_ADDR 0x3D
+#define PWR_MODE_ADDR 0x3E
+#define SYS_TRIGGER_ADDR 0x3F
+#define AXIS_MAP_CONFIG_ADDR 0x41
+#define AXIS_MAP_SIGN_ADDR 0x42
+
+// Endereços para os offsets de calibração
+#define ACC_OFFSET_X_LSB_ADDR 0x55
+#define MAG_OFFSET_X_LSB_ADDR 0x5B
+#define GYR_OFFSET_X_LSB_ADDR 0x61
+
+// Registros de dados Euler
+#define EUL_HEADING_LSB_ADDR 0x1A
+#define EUL_ROLL_LSB_ADDR 0x1C
+#define EUL_PITCH_LSB_ADDR 0x1E
 
 // GERAL
 #define TAXA_AMOSTRAGEM 100 // Valor em ms
@@ -73,11 +91,10 @@ float Referencia_Velocidade_Motor_1 = 0;
 
 // ÂNGULO
 float Referencia_Anterior_Motor_1 = 0;
-float Kp_Angulo_Motor_1 = 0;
-float Alpha_Angulo_Motor_1 = 0;
+float Kp_Angulo_Motor_1 = 0.01;
+float Alpha_Angulo_Motor_1 = 0.01;
 float Erro_Angulo_Atual_Motor_1 = 0;
 float Erro_Angulo_Anterior_Motor_1 = 0;
-float Referencia_Angulo_Motor_1 = 0;
 
 // MOTOR 2 <-----
 // ENCODER 
@@ -103,11 +120,38 @@ float Referencia_Velocidade_Motor_2 = 0;
 
 // ÂNGULO
 float Referencia_Anterior_Motor_2 = 0;
-float Kp_Angulo_Motor_2 = 0;
-float Alpha_Angulo_Motor_2 = 0;
+float Kp_Angulo_Motor_2 = 0.01;
+float Alpha_Angulo_Motor_2 = 0.01;
 float Erro_Angulo_Atual_Motor_2 = 0;
 float Erro_Angulo_Anterior_Motor_2 = 0;
-float Referencia_Angulo_Motor_2 = 0;
+
+// BNO055
+// OFFSETS
+int16_t acc_offset_x = 20; 
+int16_t acc_offset_y = 5; 
+int16_t acc_offset_z = 3; 
+int16_t mag_offset_x = 43; 
+int16_t mag_offset_y = 246; 
+int16_t mag_offset_z = -1; 
+int16_t gyr_offset_x = -2; 
+int16_t gyr_offset_y = -3; 
+int16_t gyr_offset_z = -2; 
+
+// Leitura do sensor
+int16_t heading = 0;
+
+//VARíAVEIS CONTROLE POSIÇÃO
+float angulo_giroscopio_referencia = 0;
+float angulo_giroscopio_atual = 0;
+float delta_angulo = 0;
+
+float referencia_desejada_motor1 = 0.1;
+float referencia_desejada_motor2 = 0.1;
+float referencia_atual_motor1 = 0;
+float referencia_atual_motor2 = 0;
+  
+float referencia_desejada_vel_angulo_motor1 = 0;
+float referencia_desejada_vel_angulo_motor2 = 0;
 
 #if TESTE == true
 // TIMER PARA TESTE
@@ -116,6 +160,7 @@ esp_timer_handle_t periodic_timer;
 
 // GERAL
 int Motor_Index = 0;
+float Referencia_Angulo = 0;
 
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // SETUP INICIAL 
@@ -144,6 +189,12 @@ void Controle_Velocidade(int Index);
 // ÂNGULO
 void Controle_Angulo(int Index);
 
+// BNO055
+void writeRegister(byte addr, byte reg, byte value);
+void setMode(byte mode);
+int16_t readEulerData(byte reg);
+void writeOffset(byte reg, int16_t value);
+
 #if TESTE == true
 // TIMER PARA TESTE
 void IRAM_ATTR onTimer(void* arg);
@@ -152,6 +203,21 @@ void IRAM_ATTR onTimer(void* arg);
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
   Serial.begin(115200);
+
+  // BNO055
+  setMode(0x00);  // Coloca o sensor em modo de configuração
+  // Grava os offsets
+  writeOffset(ACC_OFFSET_X_LSB_ADDR, acc_offset_x);
+  writeOffset(ACC_OFFSET_X_LSB_ADDR + 2, acc_offset_y);
+  writeOffset(ACC_OFFSET_X_LSB_ADDR + 4, acc_offset_z);
+  writeOffset(MAG_OFFSET_X_LSB_ADDR, mag_offset_x);
+  writeOffset(MAG_OFFSET_X_LSB_ADDR + 2, mag_offset_y);
+  writeOffset(MAG_OFFSET_X_LSB_ADDR + 4, mag_offset_z);
+  writeOffset(GYR_OFFSET_X_LSB_ADDR, gyr_offset_x);
+  writeOffset(GYR_OFFSET_X_LSB_ADDR + 2, gyr_offset_y);
+  writeOffset(GYR_OFFSET_X_LSB_ADDR + 4, gyr_offset_z);
+  
+  setMode(0x0A);  // Muda para o modo M4G
 
   // LÓGICA DE ACIONAMENTO
   pinMode(Pino_Botao_Emergencia, INPUT_PULLDOWN); // Define pino do botão de mergência como entrada
@@ -201,14 +267,77 @@ void setup() {
 }
 
 /////////////////////////// LOOP ////////////////////////////
-void loop() {  
+void loop() {
+
+  Serial.println(Robo_Ok ? "Mootor Ligado!" : "Motor Desligado!");  
 
 }
 
 ///////////////////////// FUNÇÕES ///////////////////////////
 // SETUP INICIAL
 void SetupInicial(){
+  // ENCODER 
+volatile long Contador_Pulsos_Canal_A_Motor_1 = 0; // Contador de pulsos do canal A do encoder do motor 1
+volatile long Contador_Pulsos_Canal_B_Motor_1 = 0; // Contador de pulsos do canal B do encoder do motor 1
 
+// PWM
+int PWM_Motor_1 = 3103; // Valor inicial para velocidade do motor 1
+
+// RPS
+double RPS_Motor_1 = 0; // Valor em m/s do motor 1
+long Aux_Convert_PWM_Motor_1 = 0; // Variável auxiliar para conversão do valor do PWM de 10 p/ 8 bits
+
+// CONTROLE
+// VELOCIDADE
+float Controle_Velocidade_Anterior_Motor_1 = 0;
+float Controle_Velocidade_Atual_Motor_1 = 0;
+float Kp_Velocidade_Motor_1 = 0;
+float Alpha_Velocidade_Motor_1 = 0;
+float Erro_Velocidade_Atual_Motor_1 = 0;
+float Erro_Velocidade_Anterior_Motor_1 = 0;
+float Referencia_Velocidade_Motor_1 = 0;
+
+// ÂNGULO
+float Referencia_Anterior_Motor_1 = 0;
+float Kp_Angulo_Motor_1 = 0.01;
+float Alpha_Angulo_Motor_1 = 0.01;
+float Erro_Angulo_Atual_Motor_1 = 0;
+float Erro_Angulo_Anterior_Motor_1 = 0;
+
+// MOTOR 2 <-----
+// ENCODER 
+volatile long Contador_Pulsos_Canal_A_Motor_2 = 0; // Contador de pulsos do canal A do encoder do motor 2
+volatile long Contador_Pulsos_Canal_B_Motor_2 = 0; // Contador de pulsos do canal B do encoder do motor 2
+
+// PWM
+int PWM_Motor_2 = 3103; // Valor inicial para velocidade do motor 2
+
+// RPS
+double RPS_Motor_2 = 0; // Valor em m/s do motor 2
+long Aux_Convert_PWM_Motor_2 = 0; // Variável auxiliar para conversão do valor do PWM de 10 p/ 8 bits
+
+// CONTROLE
+// VELOCIDADE
+float Controle_Velocidade_Anterior_Motor_2 = 0;
+float Controle_Velocidade_Atual_Motor_2 = 0;
+float Kp_Velocidade_Motor_2 = 0;
+float Alpha_Velocidade_Motor_2 = 0;
+float Erro_Velocidade_Atual_Motor_2 = 0;
+float Erro_Velocidade_Anterior_Motor_2 = 0;
+float Referencia_Velocidade_Motor_2 = 0;
+
+// ÂNGULO
+float Referencia_Anterior_Motor_2 = 0;
+float Kp_Angulo_Motor_2 = 0.01;
+float Alpha_Angulo_Motor_2 = 0.01;
+float Erro_Angulo_Atual_Motor_2 = 0;
+float Erro_Angulo_Anterior_Motor_2 = 0;
+
+Referencia_Angulo = readEulerData(EUL_HEADING_LSB_ADDR);
+Referencia_Angulo /= 16.0;
+
+dacWrite(Pino_Motor_1, 199);
+dacWrite(Pino_Motor_2, 198);
 }
 
 // LÓGICA DE ACIONAMENTO
@@ -231,7 +360,8 @@ void StatusAcionamento (){
   if (Chave_ON_OFF_Atual == HIGH && Chave_ON_OFF_Anterior == LOW) {
     if (!Botao_Emergencia_Pressionado) { // Verifica se o botão de emergência não está pressionado
       Robo_Ok = !Robo_Ok; // Altera o Estado de acionamento do robô LOW --> HIGH
-      digitalWrite(Pino_Rele_Seguranca, LOW); // Aciona o Relé  
+      digitalWrite(Pino_Rele_Seguranca, LOW); // Aciona o Relé
+      SetupInicial();  
     }
   }
   if (Chave_ON_OFF_Atual == LOW) {
@@ -331,9 +461,16 @@ void Controle_Velocidade (int Index){
 // ANGULO
 void Controle_Angulo(int Index){
   if (Index == 1){
-    float Angulo_Atual = 0;
+    float Angulo_Atual = readEulerData(EUL_HEADING_LSB_ADDR);
+    Angulo_Atual /= 16.0;
 
-    Erro_Angulo_Atual_Motor_1 = Referencia_Angulo_Motor_1 -Angulo_Atual;
+    Erro_Angulo_Atual_Motor_1 = Referencia_Angulo - Angulo_Atual;
+
+    if(Erro_Angulo_Atual_Motor_1 > 180){
+      Erro_Angulo_Atual_Motor_1 -= 360.0;
+    }else if(Erro_Angulo_Atual_Motor_1 < 180){
+      Erro_Angulo_Atual_Motor_1 +=360;
+    }
     
     Referencia_Velocidade_Motor_1 = (Referencia_Anterior_Motor_1 + (Kp_Angulo_Motor_1*Erro_Angulo_Atual_Motor_1) - (Kp_Angulo_Motor_1*Alpha_Angulo_Motor_1*Erro_Angulo_Anterior_Motor_1));
 
@@ -346,15 +483,47 @@ void Controle_Angulo(int Index){
 
       float Angulo_Atual = 0;
 
-      Erro_Angulo_Atual_Motor_2 = Referencia_Angulo_Motor_2 -Angulo_Atual;
+      Erro_Angulo_Atual_Motor_2 = Referencia_Angulo -Angulo_Atual;
       
-      Referencia_Velocidade_Motor_2 = (Referencia_Anterior_Motor_2 + (Kp_Angulo_Motor_1*Erro_Angulo_Atual_Motor_2) - (Kp_Angulo_Motor_2*Alpha_Angulo_Motor_2*Erro_Angulo_Anterior_Motor_2));
+      Referencia_Velocidade_Motor_2 = (Referencia_Anterior_Motor_2 - (Kp_Angulo_Motor_1*Erro_Angulo_Atual_Motor_2) - (Kp_Angulo_Motor_2*Alpha_Angulo_Motor_2*Erro_Angulo_Anterior_Motor_2));
 
       Erro_Angulo_Anterior_Motor_2 = Erro_Angulo_Atual_Motor_2;
       Referencia_Anterior_Motor_2 = Referencia_Velocidade_Motor_2;
 
     Controle_Velocidade(Index);
     }
+}
+
+// BNO055
+void writeRegister(byte addr, byte reg, byte value) {
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  Wire.write(value);
+  Wire.endTransmission();
+}
+
+void setMode(byte mode) {
+  writeRegister(BNO055_ADDRESS, OPR_MODE_ADDR, mode);
+  delay(25);  // Tempo para estabilizar após mudança de modo
+}
+
+int16_t readEulerData(byte reg) {
+  Wire.beginTransmission(BNO055_ADDRESS);
+  Wire.write(reg);
+  Wire.endTransmission();
+  Wire.requestFrom(BNO055_ADDRESS, (byte)2);
+  byte lsb = Wire.read();
+  byte msb = Wire.read();
+  return (int16_t)((msb << 8) | lsb);
+}
+
+
+void writeOffset(byte reg, int16_t value) {
+  Wire.beginTransmission(BNO055_ADDRESS);
+  Wire.write(reg);
+  Wire.write((byte)(value & 0xFF));
+  Wire.write((byte)((value >> 8) & 0xFF));
+  Wire.endTransmission();
 }
 
 #if TESTE == true
