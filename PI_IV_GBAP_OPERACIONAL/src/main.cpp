@@ -204,6 +204,8 @@ void IRAM_ATTR onTimer(void* arg);
 void setup() {
   Serial.begin(115200);
 
+  Wire.begin();
+
   // BNO055
   setMode(0x00);  // Coloca o sensor em modo de configuração
   // Grava os offsets
@@ -269,7 +271,16 @@ void setup() {
 /////////////////////////// LOOP ////////////////////////////
 void loop() {
 
-  Serial.println(Robo_Ok ? "Mootor Ligado!" : "Motor Desligado!");  
+  if(Robo_Ok){
+    Motor_Index = 1;
+    Controle_Angulo(1);
+    Motor_Index = 2;
+    Controle_Angulo(2);
+
+    delay(TAXA_AMOSTRAGEM);
+  }
+
+  //Serial.println(Robo_Ok ? "Mootor Ligado!" : "Motor Desligado!");  
 
 }
 
@@ -289,13 +300,13 @@ long Aux_Convert_PWM_Motor_1 = 0; // Variável auxiliar para conversão do valor
 
 // CONTROLE
 // VELOCIDADE
-float Controle_Velocidade_Anterior_Motor_1 = 0;
-float Controle_Velocidade_Atual_Motor_1 = 0;
-float Kp_Velocidade_Motor_1 = 0;
-float Alpha_Velocidade_Motor_1 = 0;
+float Controle_Velocidade_Anterior_Motor_1 = 3103;
+float Controle_Velocidade_Atual_Motor_1 = 3103;
+float Kp_Velocidade_Motor_1 = 283.19;
+float Alpha_Velocidade_Motor_1 = 0.05924;
 float Erro_Velocidade_Atual_Motor_1 = 0;
 float Erro_Velocidade_Anterior_Motor_1 = 0;
-float Referencia_Velocidade_Motor_1 = 0;
+float Referencia_Velocidade_Motor_1 = 1;
 
 // ÂNGULO
 float Referencia_Anterior_Motor_1 = 0;
@@ -318,13 +329,13 @@ long Aux_Convert_PWM_Motor_2 = 0; // Variável auxiliar para conversão do valor
 
 // CONTROLE
 // VELOCIDADE
-float Controle_Velocidade_Anterior_Motor_2 = 0;
-float Controle_Velocidade_Atual_Motor_2 = 0;
-float Kp_Velocidade_Motor_2 = 0;
-float Alpha_Velocidade_Motor_2 = 0;
+float Controle_Velocidade_Anterior_Motor_2 = 3103;
+float Controle_Velocidade_Atual_Motor_2 = 3103;
+float Kp_Velocidade_Motor_2 = 283.19;
+float Alpha_Velocidade_Motor_2 = 0.05924;
 float Erro_Velocidade_Atual_Motor_2 = 0;
 float Erro_Velocidade_Anterior_Motor_2 = 0;
-float Referencia_Velocidade_Motor_2 = 0;
+float Referencia_Velocidade_Motor_2 = 1;
 
 // ÂNGULO
 float Referencia_Anterior_Motor_2 = 0;
@@ -335,6 +346,9 @@ float Erro_Angulo_Anterior_Motor_2 = 0;
 
 Referencia_Angulo = readEulerData(EUL_HEADING_LSB_ADDR);
 Referencia_Angulo /= 16.0;
+
+Serial.print("Ângulo e referência: ");
+Serial.println(Referencia_Angulo);
 
 dacWrite(Pino_Motor_1, 199);
 dacWrite(Pino_Motor_2, 198);
