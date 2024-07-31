@@ -164,7 +164,7 @@ float Referencia_Angulo = 0;
 
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // SETUP INICIAL 
-void SetupInicial ();
+void SetupInicial();
 
 // LÓGICA DE ACIONAMENTO
 void StatusAcionamento();
