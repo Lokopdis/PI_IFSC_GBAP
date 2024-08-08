@@ -8,8 +8,8 @@
 #define MOTOR_1 true
 #define MOTOR_2 true
 #define BNO055 true
-#define TIMER false
-#define TESTE true
+#define TIMER true
+#define TESTE false
 #define PRINT true
 
 ////////////////////////// VARIAVEIS //////////////////////////
@@ -55,8 +55,8 @@ volatile double RPS_Motor_1 = 0;
 // Controlador PI
 volatile float Kp_Motor_1 = 300.19;
 volatile float Alpha_Motor_1 = 0.05924;
-volatile float Controle_Atual_Motor_1 = 8000;
-volatile float Controle_Anterior_Motor_1 = 8000;
+volatile float Controle_Atual_Motor_1 = 3103;
+volatile float Controle_Anterior_Motor_1 = 3103;
 volatile float Erro_Atual_Motor_1 = 0;
 volatile float Erro_Anterior_Motor_1 = 0;
 volatile float Referencia_Motor_1 = 1;
@@ -89,8 +89,8 @@ double RPS_Motor_2 = 0;
 // Controlador PI
 float Kp_Motor_2 = 300.19;   //283.19
 float Alpha_Motor_2 = 0.05924;
-float Controle_Atual_Motor_2 = 8000;
-float Controle_Anterior_Motor_2 = 8000;
+float Controle_Atual_Motor_2 = 3103;
+float Controle_Anterior_Motor_2 = 3103;
 float Erro_Atual_Motor_2 = 0;
 float Erro_Anterior_Motor_2 = 0;
 float Referencia_Motor_2 = 1;
@@ -145,6 +145,14 @@ volatile float Delta_Angulo = 0;
 
 volatile float constante_dinamica_prefiltro = 100;
 volatile float coeficiente_angulo = 0.05284;
+
+//////////////////////
+volatile float Controle_Angulo = 0;
+volatile float Controle_Angulo_Anterior = 0;
+volatile float Kp = 0.1;
+volatile float Alpha = 0.01;
+volatile float Delta_Anterior = 0; 
+/////////////////////
 
 // <--- OPERAÇÃO --->
 #define TEMPO_AMOSTRAGEM 100000 //Valor em us
@@ -317,7 +325,7 @@ void loop(){
         Serial.print(Referencia_Angulo);
         Serial.print(" | Angulo Atual ");
         Serial.println(Angulo_Atual );
-        delay(TEMPO_AMOSTRAGEM);
+        delay(TEMPO_AMOSTRAGEM*1000);
     }
     else{
       Setup_Inicial();
@@ -380,10 +388,17 @@ void Setup_Inicial(){
     Referencia_Correcao_Angulo_Motor_1 = 0;
     Referencia_Correcao_Angulo_Motor_2 = 0;
 
+    Controle_Angulo = 0;
+    Controle_Angulo_Anterior = 0;
+    Kp = 0.1;
+    Alpha = 0.01;
+    Delta_Anterior = 0;
+
     dacWrite(Pino_Motor_1, 199);
     dacWrite(Pino_Motor_2, 198);
 
     i = 1;
+    Serial.println("Variaveis Zeradas");
 }
 
 #endif
@@ -395,14 +410,14 @@ void contador_canalA_motor1(){
 }
 
 void contador_canalB_motor1(){
-  Contador_Pulsos_Encoder_Canala_A_Motor_2++;
+  Contador_Pulsos_Encoder_Canala_B_Motor_1++;
 }
 #endif
 
 // <--- MOTOR 2 --->
 #if MOTOR_2 == true
 void contador_canalA_motor2(){
-  Contador_Pulsos_Encoder_Canala_B_Motor_1++;
+  Contador_Pulsos_Encoder_Canala_A_Motor_2++;
 }
 
 void contador_canalB_motor2(){
@@ -414,7 +429,7 @@ void contador_canalB_motor2(){
 void Controle_Velocidade(){
 
     // <--- MOTOR 1 --->
-    RPS_Motor_1 = leitura_rotacao(Contador_Pulsos_Encoder_Canala_B_Motor_2);
+    RPS_Motor_1 = leitura_rotacao(Contador_Pulsos_Encoder_Canala_A_Motor_1);
 
     if(Referencia_Atual_Motor_1 != Referencia_Correcao_Angulo_Motor_1){
         Referencia_Atual_Motor_1 = Referencia_Atual_Motor_1 + ((Referencia_Correcao_Angulo_Motor_1 - Referencia_Atual_Motor_1) / constante_dinamica_prefiltro);
@@ -442,12 +457,11 @@ void Controle_Velocidade(){
     {
         Valor_PWM_Motor_1 = 3103;
     }
-    float Auxiliar_Converte_PWM = map(Valor_PWM_Motor_1, 0, 4095, 0, 255);
-    Serial.println(Auxiliar_Converte_PWM);
-    dacWrite(Pino_Motor_1, (int) Auxiliar_Converte_PWM); //Envia sinal para a ponte H
+    volatile float Auxiliar_Converte_PWM_1 = map(Valor_PWM_Motor_1, 0, 4095, 0, 255);
+    dacWrite(Pino_Motor_1, (int) Auxiliar_Converte_PWM_1); //Envia sinal para a ponte H
 
     // <--- MOTOR 2 --->
-    RPS_Motor_1 = leitura_rotacao(Contador_Pulsos_Encoder_Canala_A_Motor_1);
+    RPS_Motor_2 = leitura_rotacao(Contador_Pulsos_Encoder_Canala_B_Motor_2);
 
     if(Referencia_Atual_Motor_2 != Referencia_Correcao_Angulo_Motor_2){
         Referencia_Atual_Motor_2 = Referencia_Atual_Motor_2 + ((Referencia_Correcao_Angulo_Motor_2 - Referencia_Atual_Motor_2) / constante_dinamica_prefiltro);
@@ -475,14 +489,12 @@ void Controle_Velocidade(){
     {
         Valor_PWM_Motor_2 = 3103;
     }
-    Auxiliar_Converte_PWM = map(Valor_PWM_Motor_2, 0, 4095, 0, 255);
-    Serial.println(Auxiliar_Converte_PWM);
-    dacWrite(Pino_Motor_1, (int) Auxiliar_Converte_PWM); //Envia sinal para a ponte H
-
+    volatile float Auxiliar_Converte_PWM_2 = map(Valor_PWM_Motor_2, 0, 4095, 0, 255);
+    dacWrite(Pino_Motor_2, (int) Auxiliar_Converte_PWM_2); //Envia sinal para a ponte H
 }
 
 double leitura_rotacao(long pulsos){
-  double rotacao = 1000 / TEMPO_AMOSTRAGEM; //ms / ms
+  double rotacao = 10; 
   rotacao *= REDUCAO_ENCODER_MOTOR * pulsos; //Converte para rotação no motor
   rotacao /= (REDUCAO_MOTOR_RODA * ENCODER_PULSOS_VOLTA); //Converte para rotação na roda
   
@@ -516,8 +528,17 @@ void IRAM_ATTR Angulo(void *arg){
         else if(Delta_Angulo < -180){
         Delta_Angulo += 360;
         }
-        Referencia_Correcao_Angulo_Motor_1 = Referencia_Desejada_Motor_1 - (Delta_Angulo * coeficiente_angulo);
-        Referencia_Correcao_Angulo_Motor_2 = Referencia_Desejada_Motor_2 + (Delta_Angulo * coeficiente_angulo);
+
+
+        ////////////////////////////////////////////////
+        Controle_Angulo = (Controle_Angulo_Anterior+(Delta_Angulo*Kp)-(Kp*Alpha*Delta_Anterior));
+        Controle_Angulo_Anterior = Controle_Angulo;
+        Delta_Anterior = Delta_Angulo;
+
+        
+        ///////////////////////////////////////////////
+        Referencia_Correcao_Angulo_Motor_1 = Referencia_Desejada_Motor_1 - Controle_Angulo;
+        Referencia_Correcao_Angulo_Motor_2 = Referencia_Desejada_Motor_2 + Controle_Angulo;
 
         Controle_Velocidade();
         Contador_Pulsos_Encoder_Canala_A_Motor_1 = 0; //Zera a variáveis de pulsos após os calculos
