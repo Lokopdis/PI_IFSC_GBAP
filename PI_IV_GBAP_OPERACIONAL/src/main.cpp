@@ -662,25 +662,4 @@ void Angulo(){
 }
 
 #endif
-/*
-void Controle_Angulo(int Index){
-  if (Index == 1){
-    float Angulo_Atual = readEulerData(EUL_HEADING_LSB_ADDR);
-    Angulo_Atual /= 16.0;
 
-    Erro_Angulo_Atual_Motor_1 = Angulo_Atual - Referencia_Angulo;
-
-    if(Erro_Angulo_Atual_Motor_1 > 180){
-      Erro_Angulo_Atual_Motor_1 -= 360.0;
-    }else if(Erro_Angulo_Atual_Motor_1 < 180){
-      Erro_Angulo_Atual_Motor_1 +=360;
-    }
-    
-    Referencia_Velocidade_Motor_1 = (Referencia_Anterior_Motor_1 + (Kp_Angulo_Motor_1*Erro_Angulo_Atual_Motor_1) - (Kp_Angulo_Motor_1*Alpha_Angulo_Motor_1*Erro_Angulo_Anterior_Motor_1));
-
-    Erro_Angulo_Anterior_Motor_1 = Erro_Angulo_Atual_Motor_1;
-    Referencia_Anterior_Motor_1 = Referencia_Velocidade_Motor_1;
-
-    Controle_Velocidade(Index);
-}
-    */
