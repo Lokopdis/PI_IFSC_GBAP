@@ -44,9 +44,9 @@ void loop() {
     Read_Operacao();
       if (StatusOperacao == true)
       {
-        digitalWrite(Pino_Comunicacao, LOW);
-      }else{
         digitalWrite(Pino_Comunicacao, HIGH);
+      }else{
+        digitalWrite(Pino_Comunicacao, LOW);
       }
       StatusOperacaoAtual = StatusOperacao;
     Serial.println(StatusOperacao ? "Motor Ligado!" : "Motor Desligado!");
