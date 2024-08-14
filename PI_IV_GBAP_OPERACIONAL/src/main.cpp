@@ -11,6 +11,8 @@
 #define TIMER true
 #define TESTE false
 #define PRINT true
+#define PI false
+#define PD true
 
 ////////////////////////// VARIAVEIS //////////////////////////
 
@@ -26,6 +28,10 @@ volatile bool Bt_Emergencia_Pressionado = false;
 
 volatile bool Chave_Liga_Desliga_Pressionado = false; 
 volatile bool Chave_Liga_Desliga_Anterior = false; 
+
+// Acionamento Remoto
+#define Pino_Acionamento_Remoto 14
+volatile bool Bt_Acionamento_Remoto = false;
 
 // Flag de Acionamento do Robô
 volatile bool robo_ok = false;
@@ -60,7 +66,7 @@ volatile float Controle_Anterior_Motor_1 = 3103;
 volatile float Erro_Atual_Motor_1 = 0;
 volatile float Erro_Anterior_Motor_1 = 0;
 volatile float Referencia_Motor_1 = 1;
-volatile float Referencia_Atual_Motor_1 = 0;
+volatile float Referencia_Atual_Motor_1 = 0.48;
 volatile float Referencia_Desejada_Motor_1 = 1;
 
 // <--- CONTROLE ANGULO --->
@@ -94,7 +100,7 @@ float Controle_Anterior_Motor_2 = 3103;
 float Erro_Atual_Motor_2 = 0;
 float Erro_Anterior_Motor_2 = 0;
 float Referencia_Motor_2 = 1;
-float Referencia_Atual_Motor_2 = 0;
+float Referencia_Atual_Motor_2 = 0.48;
 float Referencia_Desejada_Motor_2 = 1;
 
 // <--- CONTROLE ANGULO --->
@@ -158,7 +164,7 @@ volatile float Delta_Anterior = 0;
 #define TEMPO_AMOSTRAGEM 100000 //Valor em us
 volatile int i = 1; // Contador para gerar referêcia de ângulo
 
-// <--- TIEMR --->
+// <--- TIMER --->
 #if TIMER == true
 esp_timer_handle_t Timer_Controle;
 #endif
@@ -168,6 +174,7 @@ esp_timer_handle_t Timer_Controle;
 // <--- ACIONAMENTO --->
 #if ACIONAMENTO == true
 void Acionamento();
+void Remoto();
 void Setup_Inicial();
 #endif
 
@@ -237,11 +244,13 @@ void setup() {
     // Configura Interrupçao para o botão de acioanmento
   attachInterrupt(digitalPinToInterrupt(Pino_Bt_Emergencia), Acionamento, CHANGE);
   attachInterrupt(digitalPinToInterrupt(Pino_Chave_Liga_Desliga), Acionamento, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(Pino_Acionamento_Remoto), Remoto, CHANGE);
 
   // Configura entradas e saídas do botões e do relé de segurança
   pinMode(Pino_Chave_Liga_Desliga, INPUT_PULLDOWN);
   pinMode(Pino_Bt_Emergencia, INPUT_PULLDOWN);  
   pinMode(Pino_Rele_Seguranca, OUTPUT);
+  pinMode(Pino_Acionamento_Remoto, INPUT_PULLDOWN);
   digitalWrite(Pino_Rele_Seguranca, HIGH);
 #endif
 
@@ -341,33 +350,55 @@ void loop(){
 #if ACIONAMENTO == true
 void Acionamento() {
 
- // Verifica se o botão de emergência foi pressionado
-  bool emergenciaAtual = digitalRead(Pino_Bt_Emergencia);
+    // Verifica se o botão de emergência foi pressionado
+    bool emergenciaAtual = digitalRead(Pino_Bt_Emergencia);
+    Bt_Acionamento_Remoto = digitalRead(Pino_Acionamento_Remoto);
 
-   if (emergenciaAtual == LOW && Bt_Emergencia_Pressionado == LOW) {
-    robo_ok = LOW; // Desliga o motor
-    Bt_Emergencia_Pressionado = LOW;
-    digitalWrite(Pino_Rele_Seguranca, HIGH); //Desliga a porta
-  } 
-  else if (emergenciaAtual == LOW && Bt_Emergencia_Pressionado == HIGH) {
-    Bt_Emergencia_Pressionado = LOW;
-    digitalWrite(Pino_Rele_Seguranca, HIGH); //Desliga a porta
-  }
-
-  // Verifica a borda de subida no botão de liga/desliga
-  bool ligaDesligaAtual = digitalRead(Pino_Chave_Liga_Desliga);
-
-  if (ligaDesligaAtual == HIGH && Chave_Liga_Desliga_Anterior == LOW) {
-    if (!Bt_Emergencia_Pressionado) { // Verifica se o botão de emergência não está pressionado
-      robo_ok = !robo_ok; // Alterna o estado do motor
-      digitalWrite(Pino_Rele_Seguranca, LOW); //Aciona a porta   
+    // Se o botão de emergência estiver pressionado, desliga o robô
+    if (emergenciaAtual == LOW) {
+        robo_ok = LOW; // Desliga o motor
+        Bt_Emergencia_Pressionado = LOW;
+        digitalWrite(Pino_Rele_Seguranca, HIGH); // Desliga a porta
     }
-  }
-  if (ligaDesligaAtual == LOW) {
-      robo_ok = LOW;
-      digitalWrite(Pino_Rele_Seguranca, HIGH); //Desliga a porta
-  }
-  Chave_Liga_Desliga_Anterior = ligaDesligaAtual;
+
+    // Verifica a borda de subida no botão de liga/desliga
+    bool ligaDesligaAtual = digitalRead(Pino_Chave_Liga_Desliga);
+
+    if (ligaDesligaAtual == HIGH && Chave_Liga_Desliga_Anterior == LOW) {
+        // Se a chave foi girada e o botão de emergência não está pressionado
+        if (emergenciaAtual == HIGH) {
+            robo_ok = HIGH; // Liga o robô
+            digitalWrite(Pino_Rele_Seguranca, LOW); // Liga a porta
+        }
+    } 
+    else if (ligaDesligaAtual == LOW && Chave_Liga_Desliga_Anterior == HIGH) {
+        // Se a chave foi girada para desligar, desliga o robô
+        robo_ok = LOW;
+        digitalWrite(Pino_Rele_Seguranca, HIGH); // Desliga a porta
+    }
+
+    // Atualiza o estado da chave para o próximo ciclo
+    Chave_Liga_Desliga_Anterior = ligaDesligaAtual;
+
+    
+}
+
+void Remoto(){
+
+  // Verifica se o botão de emergência foi pressionado
+    bool emergenciaAtual = digitalRead(Pino_Bt_Emergencia);
+    Bt_Acionamento_Remoto = digitalRead(Pino_Acionamento_Remoto);
+
+  // Lógica de acionamento remoto com menor prioridade
+    if (Bt_Acionamento_Remoto == HIGH && emergenciaAtual == HIGH && robo_ok == LOW) {
+        robo_ok = HIGH; // Liga o robô
+        digitalWrite(Pino_Rele_Seguranca, LOW); // Liga a porta
+    }
+    if (Bt_Acionamento_Remoto == LOW && emergenciaAtual == HIGH && robo_ok == HIGH) {
+        robo_ok = HIGH; // Liga o robô
+        digitalWrite(Pino_Rele_Seguranca, HIGH); // Liga a porta
+    }
+
 }
 
 void Setup_Inicial(){
@@ -376,11 +407,17 @@ void Setup_Inicial(){
     Controle_Anterior_Motor_1 = 3103;
     Erro_Atual_Motor_1 = 0;
     Erro_Anterior_Motor_1 = 0;
+    Referencia_Motor_1 = 1;
+    Referencia_Atual_Motor_1 = 0.48;
+    Referencia_Desejada_Motor_1 = 1;
 
     Controle_Atual_Motor_2 = 3103;
     Controle_Anterior_Motor_2 = 3103;
     Erro_Atual_Motor_2 = 0;
     Erro_Anterior_Motor_2 = 0;
+    Referencia_Motor_2 = 1;
+    Referencia_Atual_Motor_2 = 0.48;
+    Referencia_Desejada_Motor_2 = 1;
 
     Angulo_Atual = 0;
     Delta_Angulo = 0;
@@ -392,7 +429,7 @@ void Setup_Inicial(){
     Controle_Angulo_Anterior = 0;
     Kp = 0.1;
     Alpha = 0.01;
-    Delta_Anterior = 0;
+
 
     dacWrite(Pino_Motor_1, 199);
     dacWrite(Pino_Motor_2, 198);
@@ -529,16 +566,36 @@ void IRAM_ATTR Angulo(void *arg){
         Delta_Angulo += 360;
         }
 
-
+        #if PI == true
         ////////////////////////////////////////////////
         Controle_Angulo = (Controle_Angulo_Anterior+(Delta_Angulo*Kp)-(Kp*Alpha*Delta_Anterior));
         Controle_Angulo_Anterior = Controle_Angulo;
         Delta_Anterior = Delta_Angulo;
 
-        
+         if(Controle_Angulo >= 0.1){
+            Controle_Angulo = 0.2;
+         }
+
+         volatile float Dif = abs(Referencia_Angulo-Referencia_Correcao_Angulo_Motor_1);
+        if (Dif >= 0.3){
+          Referencia_Correcao_Angulo_Motor_1 = Referencia_Desejada_Motor_1 + Controle_Angulo;
+          Referencia_Correcao_Angulo_Motor_2 = Referencia_Desejada_Motor_2 - Controle_Angulo;
+        }
+        #endif
+
+        #if PD == true
+        Controle_Angulo = 0.5932*(Delta_Angulo)-0.1883*Delta_Anterior-0.00852*Controle_Angulo_Anterior;
+        Controle_Angulo_Anterior = Controle_Angulo;
+        Delta_Anterior = Delta_Angulo;
+
+        #endif
+
+
         ///////////////////////////////////////////////
         Referencia_Correcao_Angulo_Motor_1 = Referencia_Desejada_Motor_1 - Controle_Angulo;
         Referencia_Correcao_Angulo_Motor_2 = Referencia_Desejada_Motor_2 + Controle_Angulo;
+
+        
 
         Controle_Velocidade();
         Contador_Pulsos_Encoder_Canala_A_Motor_1 = 0; //Zera a variáveis de pulsos após os calculos

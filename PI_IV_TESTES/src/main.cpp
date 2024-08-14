@@ -111,7 +111,7 @@ volatile float Erro_Velocidade_Anterior_Motor_1 = 0;
 // Referencia
 volatile float Referencia_Velocidade_Motor_1 = 0;
 volatile float referencia_atual_motor1 = 0.48;
-volatile float Referencia_Velocidade_Desejada_Motor_1 = 1;
+volatile float Referencia_Velocidade_Desejada_Motor_1 = 0.9;
 
 #endif
 #endif
@@ -139,7 +139,7 @@ volatile float Erro_Velocidade_Anterior_Motor_2 = 0;
 // Referencia
 volatile float Referencia_Velocidade_Motor_2 = 0;
 volatile float referencia_atual_motor2 = 0.48;
-volatile float Referencia_Velocidade_Desejada_Motor_2 = 1;
+volatile float Referencia_Velocidade_Desejada_Motor_2 = 1.1;
 #endif
 #endif
 
@@ -453,9 +453,6 @@ if(Robo_Ok){
   Serial.print("  | ");
   Serial.print(time_us / 1000); // Converte para milissegundos
   //Serial.print(" ms");
-  Serial.print("  | ");
-  //Serial.print("Referencia:");
-  Serial.print(Referencia_Velocidade_Motor_1);
   Serial.print("  | ");
   //Serial.print("Motor 1: ");
   Serial.print(RPS_Motor_1);
