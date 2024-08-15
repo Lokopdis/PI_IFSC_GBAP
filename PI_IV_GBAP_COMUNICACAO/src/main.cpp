@@ -8,15 +8,22 @@
 
 ////////////////////////// VARIAVEIS //////////////////////////
 // CONEXÃO COM A INTERNET
-const char* SSID = "Turcatto";
-const char* Password = "36641507edu";
+const char* SSID = "Gustavo";
+const char* Password = "gustavo123";
 
 // CONEXÃO COM O BANCO DE DADOS
-const char* FirestoreURL = "https://firestore.googleapis.com/v1/projects/teste-66dfa/databases/(default)/documents/DeviceStatus/unique-document-id?key=AIzaSyCZBwHhpabgYVOHpOxQykRPRSrq2OYSaO4";
+const char* FirestoreURL = "https://firestore.googleapis.com/v1/projects/walle-ifsc/databases/(default)/documents/RobotStatus/robotData?key=AIzaSyCj2pu45s5hq-JhzcduTSn5-2heaquOetg";
 
 // VARIÁVEL PARA ALTERAR O STATUS DE FUNCIONAMENTO DO ROBÔ
 bool StatusOperacao = false;
 bool StatusOperacaoAtual = false;
+
+float BateriaLVL = 876;
+float Velocidade = 45678; 
+bool Robo_Ok = true;
+
+String Alerta = "fodeu";
+int i = 1;
 
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // CONEXÃO COM A INTERNET
@@ -27,6 +34,12 @@ void Firestore_Conect(HTTPClient& http, const char* mask);
 
 // FUNÇÕES PARA VERRIFICAR E ALTERAR O STATUS DE OPERAÇÃO DO ROBÔ
 void Read_Operacao();
+
+void Send_Data();
+String Create_Data_String_JSON(float batteryLevel, float currentSpeed, float cycleTime);
+
+void Send_Alert();
+String Create_Data_JSON(String Alarm);
 
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
@@ -49,7 +62,16 @@ void loop() {
         digitalWrite(Pino_Comunicacao, LOW);
       }
       StatusOperacaoAtual = StatusOperacao;
+    Robo_Ok = StatusOperacao;
     Serial.println(StatusOperacao ? "Motor Ligado!" : "Motor Desligado!");
+    delay(100);
+    Send_Data();
+    if(i==1){
+      delay(100);
+      Send_Alert();
+      i++;
+    }
+    delay(400);
 }
 
 ///////////////////////// FUNÇÕES ///////////////////////////
@@ -74,7 +96,7 @@ void Firestore_Conect(HTTPClient& http, const char* mask) {
 void Read_Operacao() {
   HTTPClient http;
 
-  const char* MascaraOperacaLeitura = "?mask.fieldPaths=isOn";
+  const char* MascaraOperacaLeitura = "?mask.fieldPaths=remotePower";
   Firestore_Conect(http, MascaraOperacaLeitura);
 
   int httpResponseCode = http.GET();
@@ -105,4 +127,70 @@ void Read_Operacao() {
   }
   Serial.println(StatusOperacao);
   http.end(); // Fecha a conexão HTTP
+}
+
+void Send_Data() {
+
+  HTTPClient http;
+  const char* MascaraDados = "&updateMask.fieldPaths=batteryLevel&updateMask.fieldPaths=currentSpeed&updateMask.fieldPaths=opStatus";
+  Firestore_Conect(http, MascaraDados);
+
+  String jsonPayload = Create_Data_String_JSON(BateriaLVL, Velocidade, Robo_Ok);
+  int httpResponseCode = http.sendRequest("PATCH", jsonPayload);
+
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println(httpResponseCode);
+    Serial.println(response);
+  } else {
+    Serial.print("Error on sending PATCH Request: ");
+    Serial.println(httpResponseCode);
+  }
+
+  http.end(); // Fecha a conexão HTTP
+}
+
+String Create_Data_String_JSON(float batteryLevel, float currentSpeed, float cycleTime){
+  String StrbatteryLevel = String(batteryLevel, 3);
+  String StrcurrentSpeed = String(currentSpeed, 3);
+  String StrcycleTime = String(cycleTime);
+
+  // Atualize apenas os campos batteryLevel e currentSpeed sem afetar os outros campos
+  String jsonPayload = "{\"fields\":{"
+                       "\"batteryLevel\": {\"doubleValue\":" + StrbatteryLevel + "},"
+                       "\"currentSpeed\": {\"doubleValue\":" + StrcurrentSpeed + "},"
+                       "\"opStatus\": {\"booleanValue\":" + StrcycleTime + "}}}";
+
+  return jsonPayload;
+}
+
+
+void Send_Alert(){
+  HTTPClient http;
+  const char* MascaraAlert = "&updateMask.fieldPaths=SafetyAlerts";  // Atualiza apenas o campo "dataString"
+  Firestore_Conect(http, MascaraAlert);
+
+  String jsonPayload = Create_Data_JSON(Alerta);
+  int httpResponseCode = http.sendRequest("PATCH", jsonPayload);
+
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println(httpResponseCode);
+    Serial.println(response);
+  } else {
+    Serial.print("Error on sending PATCH Request: ");
+    Serial.println(httpResponseCode);
+  }
+
+  http.end(); // Fecha a conexão HTTP
+}
+
+String Create_Data_JSON(String Alarm){
+
+String jsonPayload = "{\"fields\":{"
+                       "\"SafetyAlerts\": {\"arrayValue\": {\"values\": ["
+                       "{\"stringValue\": \"" + Alarm + "\"}]}}}}";
+
+
+  return jsonPayload;
 }
