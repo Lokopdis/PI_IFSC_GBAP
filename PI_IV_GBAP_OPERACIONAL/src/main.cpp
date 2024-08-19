@@ -395,7 +395,7 @@ void Remoto(){
         digitalWrite(Pino_Rele_Seguranca, LOW); // Liga a porta
     }
     if (Bt_Acionamento_Remoto == LOW && emergenciaAtual == HIGH && robo_ok == HIGH) {
-        robo_ok = HIGH; // Liga o robô
+        robo_ok = LOW; // Liga o robô
         digitalWrite(Pino_Rele_Seguranca, HIGH); // Liga a porta
     }
 
@@ -421,6 +421,7 @@ void Setup_Inicial(){
 
     Angulo_Atual = 0;
     Delta_Angulo = 0;
+    Delta_Anterior = 0;
 
     Referencia_Correcao_Angulo_Motor_1 = 0;
     Referencia_Correcao_Angulo_Motor_2 = 0;
@@ -584,10 +585,9 @@ void IRAM_ATTR Angulo(void *arg){
         #endif
 
         #if PD == true
-        Controle_Angulo = 0.5932*(Delta_Angulo)-0.1883*Delta_Anterior-0.00852*Controle_Angulo_Anterior;
+        Controle_Angulo = 0.05932*(Delta_Angulo)-0.01883*Delta_Anterior-0.000852*Controle_Angulo_Anterior;
         Controle_Angulo_Anterior = Controle_Angulo;
         Delta_Anterior = Delta_Angulo;
-
         #endif
 
 
