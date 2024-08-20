@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "esp_timer.h"
+#include <BluetoothSerial.h>
 
 ///////////////////////// DIRETRIZES //////////////////////////
 #define ACIONAMENTO true
@@ -10,11 +11,18 @@
 #define BNO055 true
 #define TIMER true
 #define TESTE false
-#define PRINT true
+#define PRINT false
 #define PI false
-#define PD true
+#define PD false
+#define PID true
+#define BLUETOOTH true
 
 ////////////////////////// VARIAVEIS //////////////////////////
+
+#if BLUETOOTH == true
+// Cria uma instância do BluetoothSerial
+BluetoothSerial SerialBT;
+#endif
 
 // <--- ACIONAMENTO --->
 #if ACIONAMENTO == true
@@ -148,9 +156,28 @@ int16_t gyr_offset_z = -2;
 volatile float Referencia_Angulo = 0;
 volatile float Angulo_Atual = 0;
 volatile float Delta_Angulo = 0;
+volatile float Delta_Anterior = 0;
+volatile float Delta_Anterior_2 = 0; 
 
 volatile float constante_dinamica_prefiltro = 100;
 volatile float coeficiente_angulo = 0.05284;
+
+#if PID == true
+volatile float kp = 42.0251;
+volatile float ki = 71.4388;
+volatile float kd = 4.8416;
+
+///////////////////////////
+volatile float Kd_Discreto = (kd*2)/0.1;
+volatile float Ki_Discreto = (ki*2)/0.1;
+
+volatile float P = 0;
+volatile float I = 0;
+volatile float D = 0;
+
+volatile float integral = 0;
+volatile float Max_Integral = 70;
+#endif
 
 //////////////////////
 volatile float Controle_Angulo = 0;
@@ -217,6 +244,14 @@ double leitura_rotacao(long pulsos);
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
   Serial.begin(115200);
+
+#if BLUETOOTH == true
+// Inicializa a comunicação Bluetooth
+SerialBT.begin("ESP32_Bluetooth"); // Nome do dispositivo Bluetooth
+
+// Imprime uma mensagem indicando que o Bluetooth foi iniciado
+Serial.println("Bluetooth iniciado. Dispositivo pronto para parear.");
+#endif
 
 // <--- BNO055 --->
 #if BNO055 == true
@@ -419,9 +454,12 @@ void Setup_Inicial(){
     Referencia_Atual_Motor_2 = 0.48;
     Referencia_Desejada_Motor_2 = 1;
 
+    Referencia_Angulo = 0;
     Angulo_Atual = 0;
     Delta_Angulo = 0;
     Delta_Anterior = 0;
+    Delta_Anterior_2 = 0;
+    integral = 0; 
 
     Referencia_Correcao_Angulo_Motor_1 = 0;
     Referencia_Correcao_Angulo_Motor_2 = 0;
@@ -569,7 +607,7 @@ void IRAM_ATTR Angulo(void *arg){
 
         #if PI == true
         ////////////////////////////////////////////////
-        Controle_Angulo = (Controle_Angulo_Anterior+(Delta_Angulo*Kp)-(Kp*Alpha*Delta_Anterior));
+        Controle_Angulo = (Controle_Angulo_Anterior+(Delta_Angulo*Kp*0.00786)-(Kp*Alpha*Delta_Anterior));
         Controle_Angulo_Anterior = Controle_Angulo;
         Delta_Anterior = Delta_Angulo;
 
@@ -590,12 +628,38 @@ void IRAM_ATTR Angulo(void *arg){
         Delta_Anterior = Delta_Angulo;
         #endif
 
+        #if PID == true
+        P = kp*(Delta_Angulo-Delta_Anterior);
+        I = Ki_Discreto*(Delta_Angulo+Delta_Anterior);
+        D = Kd_Discreto*(Delta_Angulo-Delta_Anterior+Delta_Anterior_2);
+
+        // Filtro anti-windup
+        integral += ki*Delta_Angulo;
+        if (integral > Max_Integral){
+          I = Max_Integral;
+        }
+
+        Controle_Angulo = Controle_Angulo_Anterior + P + I + D;
+
+        Serial.print("Erro: ");
+        Serial.print(Delta_Angulo);
+        Serial.print("  |   ");
+        Serial.print("Integral: ");
+        Serial.print(integral);
+        Serial.print("|");
+        Serial.print(I);
+        Serial.print("  | ");
+        Serial.print("Controle: ");
+        Serial.println(Controle_Angulo);
+        #endif
+
+        Delta_Anterior = Delta_Angulo;
+        Delta_Anterior_2 = Delta_Anterior;
+        Controle_Angulo_Anterior = Controle_Angulo;
 
         ///////////////////////////////////////////////
         Referencia_Correcao_Angulo_Motor_1 = Referencia_Desejada_Motor_1 - Controle_Angulo;
         Referencia_Correcao_Angulo_Motor_2 = Referencia_Desejada_Motor_2 + Controle_Angulo;
-
-        
 
         Controle_Velocidade();
         Contador_Pulsos_Encoder_Canala_A_Motor_1 = 0; //Zera a variáveis de pulsos após os calculos
@@ -623,11 +687,33 @@ void IRAM_ATTR Angulo(void *arg){
         Serial.print(" | Angulo Atual ");
         Serial.println(Angulo_Atual );
     #endif
+    #if BLUETOOTH == true
+        //SerialBT.print("Ref1: ");
+        //SerialBT.print(Referencia_Motor_1);
+
+        //SerialBT.print("        Motor 1 : ");
+        //SerialBT.print(RPS_Motor_1);
+        //SerialBT.print(" | ");
+
+        //SerialBT.print("        Ref2: ");
+        //SerialBT.print(Referencia_Motor_2);
+        
+        //SerialBT.print("         Motor 2 : ");
+        //SerialBT.print(RPS_Motor_2);
+        //SerialBT.print(" | ");
+
+        //SerialBT.print("        delta: ");
+        SerialBT.print(Delta_Angulo);
+
+        //SerialBT.print("        Ángulo ref: ");
+        //SerialBT.print(Referencia_Angulo);
+        //SerialBT.print(" | Angulo Atual ");
+        //SerialBT.println(Angulo_Atual );
+    #endif
 
     }else{
         Setup_Inicial();
     }
-
 }
 #endif
 
