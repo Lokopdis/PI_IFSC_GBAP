@@ -9,17 +9,30 @@
 #define MOTOR_1 true
 #define MOTOR_2 true
 #define BNO055 true
+
+// Funcionamento
 #define TIMER true
 #define TESTE false
-#define PRINT false
-#define PI false
+
+// Controle
+#define PI true
 #define PD false
 #define PID true
+#define ANGULO_MA false
+#define FILTRO_ANGULO false
+
+// Dados
+#define PRINT false
 #define BLUETOOTH true
 
 ////////////////////////// VARIAVEIS //////////////////////////
 
 #if BLUETOOTH == true
+// Cria uma instância do BluetoothSerial
+BluetoothSerial SerialBT;
+#endif
+
+#if BLUETOOTH_ERROR == true
 // Cria uma instância do BluetoothSerial
 BluetoothSerial SerialBT;
 #endif
@@ -153,42 +166,42 @@ int16_t gyr_offset_z = -2;
 #endif
 
 // <--- CONTROLE ANGULO --->
+
+// Variaveis
+volatile float constante_dinamica_prefiltro = 100;
 volatile float Referencia_Angulo = 0;
 volatile float Angulo_Atual = 0;
 volatile float Delta_Angulo = 0;
 volatile float Delta_Anterior = 0;
-volatile float Delta_Anterior_2 = 0; 
+volatile float Delta_Anterior_2 = 0;
+volatile float Controle_Angulo = 0;
+volatile float Controle_Angulo_Anterior = 0; 
 
-volatile float constante_dinamica_prefiltro = 100;
-volatile float coeficiente_angulo = 0.05284;
 
-#if PID == true
-volatile float kp = 42.0251;
-volatile float ki = 71.4388;
-volatile float kd = 4.8416;
 
-///////////////////////////
-volatile float Kd_Discreto = (kd*2)/0.1;
-volatile float Ki_Discreto = (ki*2)/0.1;
+#if PI == true
 
-volatile float P = 0;
-volatile float I = 0;
-volatile float D = 0;
-
-volatile float integral = 0;
-volatile float Max_Integral = 70;
 #endif
 
-//////////////////////
-volatile float Controle_Angulo = 0;
-volatile float Controle_Angulo_Anterior = 0;
-volatile float Kp = 0.1;
-volatile float Alpha = 0.01;
-volatile float Delta_Anterior = 0; 
-/////////////////////
+#if PD == true
+
+#endif
+
+#if PID == true
+// Ganhos do controlador
+float Kp = 0.0018;
+float Ki = 0.0024;
+float Kd = 0.008375;
+
+// Calculos complementares
+volatile float P = (1+((0.1)/(2*Ki))+(Kd/0.1));
+volatile float I = (((0.1)/2*Ki)-1-((2*Kd)/(0.1)));
+volatile float D = Kd/(0.1);
+
+#endif
 
 // <--- OPERAÇÃO --->
-#define TEMPO_AMOSTRAGEM 100000 //Valor em us
+#define TEMPO_AMOSTRAGEM 80000 //Valor em us
 volatile int i = 1; // Contador para gerar referêcia de ângulo
 
 // <--- TIMER --->
@@ -247,10 +260,10 @@ void setup() {
 
 #if BLUETOOTH == true
 // Inicializa a comunicação Bluetooth
-SerialBT.begin("ESP32_Bluetooth"); // Nome do dispositivo Bluetooth
+SerialBT.begin("Wall-E"); // Nome do dispositivo Bluetooth
 
-// Imprime uma mensagem indicando que o Bluetooth foi iniciado
-Serial.println("Bluetooth iniciado. Dispositivo pronto para parear.");
+//Imprime uma mensagem indicando que o Bluetooth foi iniciado
+//Serial.println("Bluetooth iniciado. Dispositivo pronto para parear.");
 #endif
 
 // <--- BNO055 --->
@@ -329,7 +342,9 @@ Serial.println("Bluetooth iniciado. Dispositivo pronto para parear.");
   // Iniciar o timer com intervalo de 100 ms (100000 microssegundos)
   esp_timer_start_periodic(Timer_Controle, TEMPO_AMOSTRAGEM);
 
-  #endif
+#endif
+
+Gerar_Referencia_Angulo();
 }
 
 /////////////////////////// LOOP ////////////////////////////
@@ -438,43 +453,48 @@ void Remoto(){
 
 void Setup_Inicial(){
 
+    Contador_Pulsos_Encoder_Canala_A_Motor_1 = 0; //Zera a variáveis de pulsos após os calculos
+    Contador_Pulsos_Encoder_Canala_B_Motor_2 = 0; //Zera a variáveis de pulsos após os calculos
+
     Controle_Atual_Motor_1 = 3103;
     Controle_Anterior_Motor_1 = 3103;
     Erro_Atual_Motor_1 = 0;
     Erro_Anterior_Motor_1 = 0;
-    Referencia_Motor_1 = 1;
-    Referencia_Atual_Motor_1 = 0.48;
-    Referencia_Desejada_Motor_1 = 1;
+    Referencia_Motor_1 = 0;
+    Referencia_Atual_Motor_1 = 0.1;
+    Referencia_Desejada_Motor_1 = 0.7;
 
     Controle_Atual_Motor_2 = 3103;
     Controle_Anterior_Motor_2 = 3103;
     Erro_Atual_Motor_2 = 0;
     Erro_Anterior_Motor_2 = 0;
-    Referencia_Motor_2 = 1;
-    Referencia_Atual_Motor_2 = 0.48;
-    Referencia_Desejada_Motor_2 = 1;
+    Referencia_Motor_2 = 0;
+    Referencia_Atual_Motor_2 = 0.1;
+    Referencia_Desejada_Motor_2 = 0.7;
 
+    constante_dinamica_prefiltro = 100;
     Referencia_Angulo = 0;
     Angulo_Atual = 0;
     Delta_Angulo = 0;
     Delta_Anterior = 0;
     Delta_Anterior_2 = 0;
-    integral = 0; 
-
-    Referencia_Correcao_Angulo_Motor_1 = 0;
-    Referencia_Correcao_Angulo_Motor_2 = 0;
-
     Controle_Angulo = 0;
-    Controle_Angulo_Anterior = 0;
-    Kp = 0.1;
-    Alpha = 0.01;
-
+    Controle_Angulo_Anterior = 0; 
 
     dacWrite(Pino_Motor_1, 199);
     dacWrite(Pino_Motor_2, 198);
 
     i = 1;
+
+    Gerar_Referencia_Angulo();
+
+    #if PRINT == true
     Serial.println("Variaveis Zeradas");
+    #endif
+
+    #if BLUETOOTH == true
+    SerialBT.println("Variaveis Zeradas");
+    #endif
 }
 
 #endif
@@ -512,6 +532,8 @@ void Controle_Velocidade(){
     }
     Referencia_Motor_1 = Referencia_Atual_Motor_1;
 
+    //Referencia_Motor_1 = Referencia_Correcao_Angulo_Motor_1;
+
     //Cálculo do erro atual
     Erro_Atual_Motor_1 = (Referencia_Motor_1 - RPS_Motor_1); 
 
@@ -539,10 +561,13 @@ void Controle_Velocidade(){
     // <--- MOTOR 2 --->
     RPS_Motor_2 = leitura_rotacao(Contador_Pulsos_Encoder_Canala_B_Motor_2);
 
+    
     if(Referencia_Atual_Motor_2 != Referencia_Correcao_Angulo_Motor_2){
         Referencia_Atual_Motor_2 = Referencia_Atual_Motor_2 + ((Referencia_Correcao_Angulo_Motor_2 - Referencia_Atual_Motor_2) / constante_dinamica_prefiltro);
     }
     Referencia_Motor_2 = Referencia_Atual_Motor_2;
+
+    //Referencia_Motor_2 = Referencia_Correcao_Angulo_Motor_2;
 
     //Cálculo do erro atual
     Erro_Atual_Motor_2 = (Referencia_Motor_2 - RPS_Motor_2); 
@@ -570,7 +595,7 @@ void Controle_Velocidade(){
 }
 
 double leitura_rotacao(long pulsos){
-  double rotacao = 10; 
+  double rotacao = 1000000/(TEMPO_AMOSTRAGEM); 
   rotacao *= REDUCAO_ENCODER_MOTOR * pulsos; //Converte para rotação no motor
   rotacao /= (REDUCAO_MOTOR_RODA * ENCODER_PULSOS_VOLTA); //Converte para rotação na roda
   
@@ -578,10 +603,7 @@ double leitura_rotacao(long pulsos){
 }
 
 void Gerar_Referencia_Angulo(){
-    Serial.println("Gerando Referencia . . .");
     Referencia_Angulo = readEulerData(EUL_HEADING_LSB_ADDR);
-    delay(10);
-     Referencia_Angulo = readEulerData(EUL_HEADING_LSB_ADDR);
     Referencia_Angulo /= 16.000;
 }
 
@@ -594,122 +616,81 @@ void IRAM_ATTR Angulo(void *arg){
         }
         Angulo_Atual = readEulerData(EUL_HEADING_LSB_ADDR);
         Angulo_Atual /= 16.0000;
-        Delta_Angulo = Referencia_Angulo -Angulo_Atual;
 
+        Delta_Angulo = Referencia_Angulo - Angulo_Atual;
         // Ajusta o ângulo se ele passar de 360 graus
         if (Delta_Angulo > 180) {
-        // Adiciona a diferença para a soma angular
         Delta_Angulo -= 360;
-        } 
-        else if(Delta_Angulo < -180){
+        } else if(Delta_Angulo < -180){
         Delta_Angulo += 360;
         }
 
+        #if PRINT == true
+        Serial.print("Delta Ângulo: ");
+        Serial.print(Delta_Angulo);
+        Serial.print(" | ");
+        #endif
+
+        Delta_Angulo = Delta_Angulo*(0.9)+Delta_Anterior*(0.1);
+
+        #if PRINT == true
+        Serial.print("Valor filtrado: ");
+        Serial.print(Delta_Angulo);
+        Serial.print(" | ");
+        Serial.print("Motor 1: ");
+        Serial.print(RPS_Motor_1);
+        Serial.print(" | ");
+        Serial.print("Motor 2: ");
+        Serial.print(RPS_Motor_2);
+        Serial.print(" | ");
+        #endif
+
         #if PI == true
-        ////////////////////////////////////////////////
-        Controle_Angulo = (Controle_Angulo_Anterior+(Delta_Angulo*Kp*0.00786)-(Kp*Alpha*Delta_Anterior));
-        Controle_Angulo_Anterior = Controle_Angulo;
-        Delta_Anterior = Delta_Angulo;
-
-         if(Controle_Angulo >= 0.1){
-            Controle_Angulo = 0.2;
-         }
-
-         volatile float Dif = abs(Referencia_Angulo-Referencia_Correcao_Angulo_Motor_1);
-        if (Dif >= 0.3){
-          Referencia_Correcao_Angulo_Motor_1 = Referencia_Desejada_Motor_1 + Controle_Angulo;
-          Referencia_Correcao_Angulo_Motor_2 = Referencia_Desejada_Motor_2 - Controle_Angulo;
-        }
+        
         #endif
 
         #if PD == true
-        Controle_Angulo = 0.05932*(Delta_Angulo)-0.01883*Delta_Anterior-0.000852*Controle_Angulo_Anterior;
-        Controle_Angulo_Anterior = Controle_Angulo;
-        Delta_Anterior = Delta_Angulo;
+
         #endif
 
         #if PID == true
-        P = kp*(Delta_Angulo-Delta_Anterior);
-        I = Ki_Discreto*(Delta_Angulo+Delta_Anterior);
-        D = Kd_Discreto*(Delta_Angulo-Delta_Anterior+Delta_Anterior_2);
 
-        // Filtro anti-windup
-        integral += ki*Delta_Angulo;
-        if (integral > Max_Integral){
-          I = Max_Integral;
+        Controle_Angulo = Kp*(P)*Delta_Angulo + Kp*(I)*Delta_Anterior + D*Delta_Anterior_2;
+
+        // Saturação do controlador
+        if (Controle_Angulo >= 0.1){
+          Controle_Angulo = 0.1;
+        }else if(Controle_Angulo <=-0.1){
+          Controle_Angulo = -0.1;
         }
 
-        Controle_Angulo = Controle_Angulo_Anterior + P + I + D;
+        Controle_Angulo_Anterior = Controle_Angulo;
+        Delta_Anterior_2 = Delta_Anterior;
+        Delta_Anterior = Delta_Angulo;
 
-        Serial.print("Erro: ");
-        Serial.print(Delta_Angulo);
-        Serial.print("  |   ");
-        Serial.print("Integral: ");
-        Serial.print(integral);
-        Serial.print("|");
-        Serial.print(I);
-        Serial.print("  | ");
-        Serial.print("Controle: ");
+        #if PRINT == true
+        Serial.print("Ação de controle: ");
         Serial.println(Controle_Angulo);
         #endif
 
-        Delta_Anterior = Delta_Angulo;
-        Delta_Anterior_2 = Delta_Anterior;
-        Controle_Angulo_Anterior = Controle_Angulo;
+        #endif
 
-        ///////////////////////////////////////////////
+        #if ANGULO_MA == true
+        Controle_Angulo = 0;
+        #endif
+
         Referencia_Correcao_Angulo_Motor_1 = Referencia_Desejada_Motor_1 - Controle_Angulo;
         Referencia_Correcao_Angulo_Motor_2 = Referencia_Desejada_Motor_2 + Controle_Angulo;
 
         Controle_Velocidade();
         Contador_Pulsos_Encoder_Canala_A_Motor_1 = 0; //Zera a variáveis de pulsos após os calculos
         Contador_Pulsos_Encoder_Canala_B_Motor_2 = 0; //Zera a variáveis de pulsos após os calculos
-    #if PRINT == true
-        Serial.print("Ref1: ");
-        Serial.print(Referencia_Motor_1);
 
-        Serial.print("        Motor 1 : ");
-        Serial.print(RPS_Motor_1);
-        Serial.print(" | ");
-
-        Serial.print("        Ref2: ");
-        Serial.print(Referencia_Motor_2);
-        
-        Serial.print("         Motor 2 : ");
-        Serial.print(RPS_Motor_2);
-        Serial.print(" | ");
-
-        Serial.print("        delta: ");
-        Serial.print(Delta_Angulo);
-
-        Serial.print("        Ángulo ref: ");
-        Serial.print(Referencia_Angulo);
-        Serial.print(" | Angulo Atual ");
-        Serial.println(Angulo_Atual );
-    #endif
-    #if BLUETOOTH == true
-        //SerialBT.print("Ref1: ");
-        //SerialBT.print(Referencia_Motor_1);
-
-        //SerialBT.print("        Motor 1 : ");
-        //SerialBT.print(RPS_Motor_1);
-        //SerialBT.print(" | ");
-
-        //SerialBT.print("        Ref2: ");
-        //SerialBT.print(Referencia_Motor_2);
-        
-        //SerialBT.print("         Motor 2 : ");
-        //SerialBT.print(RPS_Motor_2);
-        //SerialBT.print(" | ");
-
-        //SerialBT.print("        delta: ");
-        SerialBT.print(Delta_Angulo);
-
-        //SerialBT.print("        Ángulo ref: ");
-        //SerialBT.print(Referencia_Angulo);
-        //SerialBT.print(" | Angulo Atual ");
-        //SerialBT.println(Angulo_Atual );
-    #endif
+        #if BLUETOOTH == true
+        SerialBT.print(Referencia_Angulo);
+        SerialBT.print(" | ");
+        SerialBT.println(Delta_Angulo);
+        #endif
 
     }else{
         Setup_Inicial();
