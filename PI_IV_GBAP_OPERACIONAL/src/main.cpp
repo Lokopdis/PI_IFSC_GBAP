@@ -23,7 +23,7 @@
 
 // Dados
 #define PRINT false
-#define BLUETOOTH true
+#define BLUETOOTH false
 
 ////////////////////////// VARIAVEIS //////////////////////////
 
@@ -189,9 +189,9 @@ volatile float Controle_Angulo_Anterior = 0;
 
 #if PID == true
 // Ganhos do controlador
-float Kp = 0.0018;
-float Ki = 0.0024;
-float Kd = 0.008375;
+float Kp = 0.0002;
+float Ki = 0.00005;
+float Kd = 0.0000375;
 
 // Calculos complementares
 volatile float P = (1+((0.1)/(2*Ki))+(Kd/0.1));
@@ -631,7 +631,7 @@ void IRAM_ATTR Angulo(void *arg){
         Serial.print(" | ");
         #endif
 
-        Delta_Angulo = Delta_Angulo*(0.9)+Delta_Anterior*(0.1);
+        Delta_Angulo = Delta_Angulo*(0.8)+Delta_Anterior*(0.2);
 
         #if PRINT == true
         Serial.print("Valor filtrado: ");
@@ -655,13 +655,24 @@ void IRAM_ATTR Angulo(void *arg){
 
         #if PID == true
 
-        Controle_Angulo = Kp*(P)*Delta_Angulo + Kp*(I)*Delta_Anterior + D*Delta_Anterior_2;
+        Controle_Angulo =Controle_Angulo_Anterior + Kp*(P)*Delta_Angulo + Kp*(I)*Delta_Anterior + D*Delta_Anterior_2;
+
+        #if BLUETOOTH == true
+        SerialBT.print(Controle_Angulo);
+        SerialBT.print(" | ");
+        #endif
 
         // Saturação do controlador
         if (Controle_Angulo >= 0.1){
           Controle_Angulo = 0.1;
         }else if(Controle_Angulo <=-0.1){
           Controle_Angulo = -0.1;
+        }
+
+        if (Delta_Angulo >= 1.2){
+          Delta_Angulo = 1.2;
+        }else if(Delta_Angulo <=-1.2){
+          Delta_Angulo = -1.2;
         }
 
         Controle_Angulo_Anterior = Controle_Angulo;

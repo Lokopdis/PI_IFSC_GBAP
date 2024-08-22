@@ -100,39 +100,32 @@ void setup() {
     // ENCODERS
     attachInterrupt(digitalPinToInterrupt(Pino_Encoder_Motor_1), Conter_Encoder_Motor_1, FALLING);
     attachInterrupt(digitalPinToInterrupt(Pino_Encoder_Motor_1), Conter_Encoder_Motor_2, FALLING);
-
-    // TIMER
-    const esp_timer_create_args_t timer_args = {
-    .callback = &Dados,  // Função de callback
-    .name = "Timer_Dados"      // Nome do timer (para fins de depuração)
-  };
-
-  // Criar o timer
-  esp_timer_create(&timer_args, &Timer_Dados);
-
-  // Iniciar o timer com intervalo de 100 ms (100000 microssegundos)
-  esp_timer_start_periodic(Timer_Dados, TEMPO_AMOSTRAGEM);  
+ 
 }
 
 /////////////////////////// LOOP ////////////////////////////
 void loop() {
     Read_Operacao();
+    
     if (StatusOperacao == true)
     {
       digitalWrite(Pino_Comunicacao, HIGH);
+      Serial.println("Ligado");
     }else{
       digitalWrite(Pino_Comunicacao, LOW);
+      Serial.println("Desligado");
     }
     StatusOperacaoAtual = StatusOperacao;
-    //Serial.println(StatusOperacao ? "Motor Ligado!" : "Motor Desligado!");
-    delay(10);
-    Send_Data();
-    if(i==1){
-      delay(10);
-      Send_Alert();
-      i++;
+    if(Velocidade<0.7){
+
+      Velocidade +=0.15;
+
+    }else{
+      Velocidade = 0.7;
     }
-    delay(10);
+    Serial.println(Velocidade);
+
+    Send_Data();
 }
 
 ///////////////////////// FUNÇÕES ///////////////////////////
@@ -193,11 +186,13 @@ void Read_Operacao() {
 void Send_Data() {
 
   HTTPClient http;
-  const char* MascaraDados = "&updateMask.fieldPaths=batteryLevel&updateMask.fieldPaths=currentSpeed&updateMask.fieldPaths=opStatus";
+  const char* MascaraDados = "&updateMask.fieldPaths=batteryLevel&updateMask.fieldPaths=currentSpeed";
   Firestore_Conect(http, MascaraDados);
 
   String jsonPayload = Create_Data_String_JSON(BateriaLVL, Velocidade, Robo_Ok);
   int httpResponseCode = http.sendRequest("PATCH", jsonPayload);
+
+  //Serial.println("Ta enviando!!!!!!!!!!!!!!!!!!!!");
 
   if (httpResponseCode > 0) {
     String response = http.getString();
@@ -219,8 +214,7 @@ String Create_Data_String_JSON(float batteryLevel, float currentSpeed, float cyc
   // Atualize apenas os campos batteryLevel e currentSpeed sem afetar os outros campos
   String jsonPayload = "{\"fields\":{"
                        "\"batteryLevel\": {\"doubleValue\":" + StrbatteryLevel + "},"
-                       "\"currentSpeed\": {\"doubleValue\":" + StrcurrentSpeed + "},"
-                       "\"opStatus\": {\"booleanValue\":" + StrcycleTime + "}}}";
+                       "\"currentSpeed\": {\"doubleValue\":" + StrcurrentSpeed + "}}}";
 
   return jsonPayload;
 }
@@ -277,13 +271,3 @@ double RPS(long Pulsos){
   Leitura_Bateria = analogRead(13);
   BateriaLVL = (Leitura_Bateria*100)/4096;
 }*/
-
-void IRAM_ATTR Dados(void *args){
-  RPS_1 = RPS(Pulsos_Encoder_Motor_1);
-  RPS_2 = RPS(Pulsos_Encoder_Motor_2);
-  Pulsos_Encoder_Motor_1 = 0;
-  Pulsos_Encoder_Motor_2 = 0;
-  Velocidade = (RPS_1+RPS_2)/2;
-  Robo_Ok = StatusOperacaoAtual;
-  BateriaLVL = 87;
-}
