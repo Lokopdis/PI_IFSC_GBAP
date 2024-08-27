@@ -65,7 +65,7 @@ void Read_Operacao();
 
 // FUNÇÕES PARA ENVIO DE DADOS DE OPERAÇÃO
 void Send_Data();
-String Create_Data_String_JSON(float batteryLevel, float currentSpeed, float cycleTime);
+String Create_Data_String_JSON(float batteryLevel, float currentSpeed);
 
 // FUNÇÕES PARA ENVIO DE ALERTAS
 void Send_Alert();
@@ -81,9 +81,6 @@ double RPS(long Pulsos);
 // TIMER
 void IRAM_ATTR Dados(void *arg);
 
-
-// FUNÇÃO PARA LEITURA DA BATERIA
-//void LeituraBateria();
 
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
@@ -185,11 +182,15 @@ void Read_Operacao() {
 
 void Send_Data() {
 
+  RPS_1 = RPS(Pulsos_Encoder_Motor_1);
+  Velocidade = RPS_1;
+  Pulsos_Encoder_Motor_1=0;
+
   HTTPClient http;
   const char* MascaraDados = "&updateMask.fieldPaths=batteryLevel&updateMask.fieldPaths=currentSpeed";
   Firestore_Conect(http, MascaraDados);
 
-  String jsonPayload = Create_Data_String_JSON(BateriaLVL, Velocidade, Robo_Ok);
+  String jsonPayload = Create_Data_String_JSON(BateriaLVL, Velocidade);
   int httpResponseCode = http.sendRequest("PATCH", jsonPayload);
 
   //Serial.println("Ta enviando!!!!!!!!!!!!!!!!!!!!");
@@ -206,10 +207,9 @@ void Send_Data() {
   http.end(); // Fecha a conexão HTTP
 }
 
-String Create_Data_String_JSON(float batteryLevel, float currentSpeed, float cycleTime){
+String Create_Data_String_JSON(float batteryLevel, float currentSpeed){
   String StrbatteryLevel = String(batteryLevel, 3);
   String StrcurrentSpeed = String(currentSpeed, 3);
-  String StrcycleTime = String(cycleTime);
 
   // Atualize apenas os campos batteryLevel e currentSpeed sem afetar os outros campos
   String jsonPayload = "{\"fields\":{"
