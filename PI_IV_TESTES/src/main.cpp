@@ -11,7 +11,7 @@
 #define BNO055 true
 #define ULTRA_1 true
 #define ULTRA_2 false
-#define SEG_ANGULO true
+#define SEG_ANGULO false
 
 // Funcionamento
 #define TIMER true
@@ -26,7 +26,7 @@
 
 // Dados
 #define PRINT false
-#define BLUETOOTH false
+#define BLUETOOTH true
 
 ////////////////////////// VARIAVEIS //////////////////////////
 
@@ -431,10 +431,10 @@ void Acionamento() {
     if (ligaDesligaAtual == HIGH && Chave_Liga_Desliga_Anterior == LOW) {
         // Se a chave foi girada e o botão de emergência não está pressionado
         if (emergenciaAtual == HIGH) {
-          if(distance <=100){
+
             robo_ok = HIGH; // Liga o robô
             digitalWrite(Pino_Rele_Seguranca, LOW); // Liga a porta
-          }
+
         }
     } 
     else if (ligaDesligaAtual == LOW && Chave_Liga_Desliga_Anterior == HIGH) {
@@ -457,17 +457,21 @@ void Remoto(){
 
   // Lógica de acionamento remoto com menor prioridade
     if (Bt_Acionamento_Remoto == HIGH && emergenciaAtual == HIGH && robo_ok == LOW) {
-        robo_ok = HIGH; // Liga o robô
-        digitalWrite(Pino_Rele_Seguranca, LOW); // Liga a porta
+
+            robo_ok = HIGH; // Liga o robô
+            digitalWrite(Pino_Rele_Seguranca, LOW); // Liga a porta
+
     }
     if (Bt_Acionamento_Remoto == LOW && emergenciaAtual == HIGH && robo_ok == HIGH) {
         robo_ok = LOW; // Liga o robô
-        digitalWrite(Pino_Rele_Seguranca, HIGH); // Liga a porta
+        digitalWrite(Pino_Rele_Seguranca, HIGH); // Desliga a porta
     }
 
 }
 
 void Setup_Inicial(){
+
+  Read_Front();
 
     Contador_Pulsos_Encoder_Canala_A_Motor_1 = 0; //Zera a variáveis de pulsos após os calculos
     Contador_Pulsos_Encoder_Canala_B_Motor_2 = 0; //Zera a variáveis de pulsos após os calculos
@@ -630,6 +634,8 @@ void IRAM_ATTR Angulo(void *arg){
             Gerar_Referencia_Angulo();
             i++;
         }
+
+        Read_Front();
         Angulo_Atual = readEulerData(EUL_HEADING_LSB_ADDR);
         Angulo_Atual /= 16.0000;
 
@@ -665,6 +671,9 @@ void IRAM_ATTR Angulo(void *arg){
         Serial.print(" | ");
         Serial.print("Motor 2: ");
         Serial.print(RPS_Motor_2);
+        Serial.print(" | ");
+        Serial.print("Distncia:");
+        Serial.print(distance);
         Serial.print(" | ");
         #endif
 
@@ -835,9 +844,11 @@ void Read_Front(){
 
   // Calcular a distância em cm
   distance = duration * 0.034 / 2;
-  if (distance > 100){
+
+  if (distance > 30 && distance < 100){
+    Serial.println("!!!!!!!!!!!!!!!1");
     robo_ok = false;
-    digitalWrite(Pino_Rele_Seguranca, HIGH); // Desliga porta
+    digitalWrite(Pino_Rele_Seguranca, HIGH); // Desliga a porta
   }
 }
 #endif

@@ -15,7 +15,7 @@
 #define TESTE false
 
 // Controle
-#define PI true
+#define PI false
 #define PD false
 #define PID true
 #define ANGULO_MA false
@@ -23,7 +23,7 @@
 
 // Dados
 #define PRINT false
-#define BLUETOOTH false
+#define BLUETOOTH true
 
 ////////////////////////// VARIAVEIS //////////////////////////
 

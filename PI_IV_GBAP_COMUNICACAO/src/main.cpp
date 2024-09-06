@@ -1,6 +1,6 @@
 ///////////////////////// BIBLIOTECAS /////////////////////////
 #include <Arduino.h>
-#include <Wifi.h>
+#include <WiFi.h>
 #include <HTTPClient.h>
 
 /////////////////////////// DEFINES ///////////////////////////
@@ -10,29 +10,20 @@
 #define Pino_Encoder_Motor_1 5 // Canal A
 #define Pino_Encoder_Motor_2 2 // Canal B
 
-// LEITURA BATERIA
-//#define Entrada_Bateria 13
-
 ////////////////////////// VARIAVEIS //////////////////////////
 // CONEXÃO COM A INTERNET
-const char* SSID = "Turcatto";
-const char* Password = "36641507edu";
+const char* SSID = "Gustavo";
+const char* Password = "gustavo123";
 
 // CONEXÃO COM O BANCO DE DADOS
 const char* FirestoreURL = "https://firestore.googleapis.com/v1/projects/walle-ifsc/databases/(default)/documents/RobotStatus/robotData?key=AIzaSyCj2pu45s5hq-JhzcduTSn5-2heaquOetg";
 
 // VARIÁVEL PARA ALTERAR O STATUS DE FUNCIONAMENTO DO ROBÔ
 bool StatusOperacao = false;
-bool StatusOperacaoAtual = false;
 
 // VARIAVEIS DE OPERAÇÃO DO ROBÔ
 float BateriaLVL = 87;
 float Velocidade = 0; 
-bool Robo_Ok = true;
-
-// VARIAVEIS DE ALARME
-String Alerta = "Teste!!";
-int i = 1;
 
 // VARIAVEIS PARA LEITURA DOS ENCODERS
 volatile long Pulsos_Encoder_Motor_1 = 0;
@@ -43,15 +34,8 @@ float Reducao_Encoder_Motor = 3;
 float Reducao_Motor_Roda = 32;
 float Pulsos_Revolucao = 1000;
 
-float RPS_1 = 0;
-float RPS_2 = 0;
-
-// NÍVEL DA BATERIA
-float Leitura_Bateria = 0;
-
-// TIMER
-esp_timer_handle_t Timer_Dados;
-#define TEMPO_AMOSTRAGEM 100000 //Valor em us
+double RPS_1 = 0;
+double RPS_2 = 0;
 
 //////////////////// DECLARAÇÃO DE FUNÇÕES ///////////////////
 // CONEXÃO COM A INTERNET
@@ -61,32 +45,25 @@ void Wifi_Conect();
 void Firestore_Conect(HTTPClient& http, const char* mask);
 
 // FUNÇÕES PARA VERRIFICAR E ALTERAR O STATUS DE OPERAÇÃO DO ROBÔ
-void Read_Operacao();
+void Read_Operacao(void* pvParameters);
 
 // FUNÇÕES PARA ENVIO DE DADOS DE OPERAÇÃO
 void Send_Data();
 String Create_Data_String_JSON(float batteryLevel, float currentSpeed);
 
-// FUNÇÕES PARA ENVIO DE ALERTAS
-void Send_Alert();
-String Create_Alert_String_JSON(String Alarm);
-
-// FUNÇÕES PARA INCRMETAR CONTADOR DE PULSOS DO ENCODER
+// FUNÇÕES PARA INCRMENTAR CONTADOR DE PULSOS DO ENCODER
 void Conter_Encoder_Motor_1();
 void Conter_Encoder_Motor_2();
 
 // FUNÇÃO PARA LEITURA DO RPS
 double RPS(long Pulsos);
 
-// TIMER
-void IRAM_ATTR Dados(void *arg);
-
+// FUNÇÃO PARA LEITURA E ENVIO DA VELOCIDADE
+void LeituraEnvioVelocidade(void* pvParameters);
 
 //////////////////////////// SETUP ///////////////////////////
 void setup() {
     Serial.begin(115200);
-
-    HTTPClient http; 
 
     Wifi_Conect();
 
@@ -96,33 +73,17 @@ void setup() {
 
     // ENCODERS
     attachInterrupt(digitalPinToInterrupt(Pino_Encoder_Motor_1), Conter_Encoder_Motor_1, FALLING);
-    attachInterrupt(digitalPinToInterrupt(Pino_Encoder_Motor_1), Conter_Encoder_Motor_2, FALLING);
- 
+    attachInterrupt(digitalPinToInterrupt(Pino_Encoder_Motor_2), Conter_Encoder_Motor_2, FALLING);
+
+    // Criação das tasks para os dois cores
+    xTaskCreatePinnedToCore(Read_Operacao, "TaskOperacao", 10000, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(LeituraEnvioVelocidade, "TaskVelocidade", 10000, NULL, 1, NULL, 1);
 }
 
 /////////////////////////// LOOP ////////////////////////////
 void loop() {
-    Read_Operacao();
-    
-    if (StatusOperacao == true)
-    {
-      digitalWrite(Pino_Comunicacao, HIGH);
-      Serial.println("Ligado");
-    }else{
-      digitalWrite(Pino_Comunicacao, LOW);
-      Serial.println("Desligado");
-    }
-    StatusOperacaoAtual = StatusOperacao;
-    if(Velocidade<0.7){
-
-      Velocidade +=0.15;
-
-    }else{
-      Velocidade = 0.7;
-    }
-    Serial.println(Velocidade);
-
-    Send_Data();
+  // O loop principal fica vazio pois as tasks estão sendo executadas em paralelo
+  delay(1000); 
 }
 
 ///////////////////////// FUNÇÕES ///////////////////////////
@@ -144,56 +105,67 @@ void Firestore_Conect(HTTPClient& http, const char* mask) {
 }
 
 // FUNÇÕES PARA VERRIFICAR E ALTERAR O STATUS DE OPERAÇÃO DO ROBÔ
-void Read_Operacao() {
-  HTTPClient http;
+void Read_Operacao(void* pvParameters) {
+  for (;;) { // Loop infinito para a task
+    HTTPClient http;
 
-  const char* MascaraOperacaLeitura = "?mask.fieldPaths=remotePower";
-  Firestore_Conect(http, MascaraOperacaLeitura);
+    const char* MascaraOperacaLeitura = "?mask.fieldPaths=remotePower";
+    Firestore_Conect(http, MascaraOperacaLeitura);
 
-  int httpResponseCode = http.GET();
+    int httpResponseCode = http.GET();
 
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    // Parse JSON response to get the value of isOn
-    int startIndex = response.indexOf("\"booleanValue\":");
-    if (startIndex != -1) {
-      startIndex += strlen("\"booleanValue\":");
-      int endIndex = response.indexOf("}", startIndex);
-      String isOnValue = response.substring(startIndex, endIndex);
-      isOnValue.trim(); // Remove leading and trailing spaces, if any
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      // Parse JSON response to get the value of isOn
+      int startIndex = response.indexOf("\"booleanValue\":");
+      if (startIndex != -1) {
+        startIndex += strlen("\"booleanValue\":");
+        int endIndex = response.indexOf("}", startIndex);
+        String isOnValue = response.substring(startIndex, endIndex);
+        isOnValue.trim(); // Remove leading and trailing spaces, if any
 
-      if (isOnValue.equals("true")) {
-        StatusOperacao = true;
-        //Serial.println("1");
+        if (isOnValue.equals("true")) {
+          StatusOperacao = true;
+          digitalWrite(Pino_Comunicacao, HIGH);
+          Serial.println("Ligado");
+        } else {
+          StatusOperacao = false;
+          digitalWrite(Pino_Comunicacao, LOW);
+          Serial.println("Desligado");
+        }
       } else {
-        StatusOperacao = false;
-        //Serial.println("0");
+        //Serial.println("isOn field not found in the response");
       }
     } else {
-      //Serial.println("isOn field not found in the response");
+      Serial.print("Error on sending GET Request: ");
+      Serial.println(httpResponseCode);
     }
-  } else {
-    //Serial.print("Error on sending GET Request: ");
-    //Serial.println(httpResponseCode);
+
+    http.end(); // Fecha a conexão HTTP
+
+    delay(1000); // Delay para evitar overloading da task
   }
-  //Serial.println(StatusOperacao);
-  http.end(); // Fecha a conexão HTTP
+}
+
+void LeituraEnvioVelocidade(void* pvParameters) {
+  for (;;) { // Loop infinito para a task
+    RPS_1 = RPS(Pulsos_Encoder_Motor_1);
+    Velocidade = RPS_1;
+    Pulsos_Encoder_Motor_1 = 0;
+    //Serial.println(Velocidade);
+    Send_Data();
+
+    delay(500); // Delay para evitar overloading da task
+  }
 }
 
 void Send_Data() {
-
-  RPS_1 = RPS(Pulsos_Encoder_Motor_1);
-  Velocidade = RPS_1;
-  Pulsos_Encoder_Motor_1=0;
-
   HTTPClient http;
   const char* MascaraDados = "&updateMask.fieldPaths=batteryLevel&updateMask.fieldPaths=currentSpeed";
   Firestore_Conect(http, MascaraDados);
 
   String jsonPayload = Create_Data_String_JSON(BateriaLVL, Velocidade);
   int httpResponseCode = http.sendRequest("PATCH", jsonPayload);
-
-  //Serial.println("Ta enviando!!!!!!!!!!!!!!!!!!!!");
 
   if (httpResponseCode > 0) {
     String response = http.getString();
@@ -219,43 +191,12 @@ String Create_Data_String_JSON(float batteryLevel, float currentSpeed){
   return jsonPayload;
 }
 
-
-void Send_Alert(){
-  HTTPClient http;
-  const char* MascaraAlert = "&updateMask.fieldPaths=SafetyAlerts";  // Atualiza apenas o campo "dataString"
-  Firestore_Conect(http, MascaraAlert);
-
-  String jsonPayload = Create_Alert_String_JSON(Alerta);
-  int httpResponseCode = http.sendRequest("PATCH", jsonPayload);
-
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    //Serial.println(httpResponseCode);
-    //Serial.println(response);
-  } else {
-    //Serial.print("Error on sending PATCH Request: ");
-    //Serial.println(httpResponseCode);
-  }
-
-  http.end(); // Fecha a conexão HTTP
-}
-
-String Create_Alert_String_JSON(String Alarm){
-
-String jsonPayload = "{\"fields\":{"
-                       "\"SafetyAlerts\": {\"arrayValue\": {\"values\": ["
-                       "{\"stringValue\": \"" + Alarm + "\"}]}}}}";
-
-
-  return jsonPayload;
-}
-
 void Conter_Encoder_Motor_1(){
   Pulsos_Encoder_Motor_1++;
 }
 
 void Conter_Encoder_Motor_2(){
-  Pulsos_Encoder_Motor_2;
+  Pulsos_Encoder_Motor_2++;
 }
 
 // LEITURA RPS 
@@ -266,8 +207,3 @@ double RPS(long Pulsos){
   
   return rotacao; //Retorna RPS da roda
 }
-
-/*void LeituraBateria(){
-  Leitura_Bateria = analogRead(13);
-  BateriaLVL = (Leitura_Bateria*100)/4096;
-}*/
